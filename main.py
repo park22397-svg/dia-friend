@@ -1230,7 +1230,7 @@ def first_talk_api():
                 return jsonify({
                     "speak": True,
                     "reply": ask["line"],
-                    "expression": ask.get("expression") or "fluster",
+                    "expression": ask.get("expression") or "surprised",
                     "motion": ask.get("motion"),
                     "cues": [],
                     "stage": stage.key,
@@ -3825,7 +3825,7 @@ def rig_page():
 # 표정 배합기
 #
 # 표정 그룹과 모프 조각을 슬라이더로 섞어 보고 이름을 붙여 둔다.
-# 적는 곳은 expressions_custom.json — 코드의 잠근 값은 안 건드린다.
+# 적는 곳은 expressions_custom.json — avatar.py 의 기본값은 안 건드린다.
 # 표정은 모두의 다이아에게 걸리므로 이 컴퓨터에서만 고칠 수 있다.
 # ============================================================
 

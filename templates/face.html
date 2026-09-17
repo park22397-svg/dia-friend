@@ -531,7 +531,7 @@ function loadExpression(key) {
     if (e.when && (e.live_triggers || []).some(t => /\p{Extended_Pictographic}/u.test(t)))
         notes.push('다이아는 이 얼굴을 이모지로 고른다.');
     if (!MINE[key])
-        notes.push('코드에 잠근 표정이다. 덮어쓰면 expressions_custom.json 에 적히고, 지우면 원래 값으로 돌아간다.');
+        notes.push('아바타 파일에서 가져온 기본 표정이다. 덮어쓰면 expressions_custom.json 에 적히고, 지우면 파일 값으로 돌아간다.');
     document.getElementById('loadedNote').innerHTML = notes.join('<br>');
 
     document.getElementById('btnOver').disabled = !EDITABLE;
@@ -582,7 +582,6 @@ async function save(overwrite) {
     if (overwrite) {
         if (!loadedKey) return;
         const e = ENTITY.expressions.find(x => x.key === loadedKey);
-        if (!MINE[loadedKey] && !confirm('"' + e.label + '" 은 사람이 맞춰 잠근 표정이다. 덮어쓸까?\n(지우기로 언제든 원래대로 돌아간다)')) return;
         body.key = loadedKey;
     }
 

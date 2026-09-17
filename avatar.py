@@ -3405,27 +3405,19 @@ DIA = VirtualAvatar(
     # --------------------------------------------------------
 
     # ========================================================
-    #  표정 수치는 2026-08-18 에 잠갔다. 바꾸지 말 것.
+    #  표정 수치는 아바타 파일(static/avatar.vrm)에 있는 그대로다.
     # ========================================================
     #
-    # 이 숫자들은 계산으로 나온 것이 아니다. 사람이 화면을 보면서
-    # 하나하나 밀어 보고 정한 값이다. 그래서 한 번 어긋나면
-    # 무엇이 옳았는지 되돌릴 근거가 없다.
+    # 2026-09-17 에 옛 아바타에서 맞춘 수치를 전부 지웠다. 새 아바타는
+    # VRoid 에서 표정을 건드리지 않고 내보내서, 그룹마다 조각 하나가
+    # 100 으로 걸려 있다(기쁨 = Fcl_ALL_Joy 100). 그 값을 그대로 쓴다.
     #
-    # 예를 들어
-    #   윙크 blink 0.55   — 1.0 이면 윙크가 아니라 찡그린 얼굴이 된다
-    #   시무룩 MTH_Sorrow — MTH_Down 은 입 가운데를 1.4cm 끌어내려
-    #                       입꼬리가 아니라 입 전체가 처진다
-    #   EYE_Iris_Hide     — 0.3 같은 중간값을 쓰면 눈동자가 지워지다 만
-    #                       것처럼 보여 슬픔이 아니라 고장으로 읽힌다
+    # 표정을 다듬거나 새로 만드는 것은 /face(표정 배합기)에서 한다.
+    # 거기서 만든 것은 expressions_custom.json 에 적힌다.
     #
-    # 잠근 값은 _expressions_locked.json 에 떠 두었다.
-    # 어긋났는지는 이렇게 본다.
+    # 여기 적힌 그룹 이름이 아바타 파일에 정말 있는지는 이렇게 본다.
     #
     #   python _verify_expressions.py
-    #
-    # 표정을 새로 만드는 것은 괜찮다. 있던 것이 바뀌는 것만 잡는다.
-    # 일부러 바꿨다면 --잠금 을 붙여 다시 떠 두어야 한다.
     # ========================================================
 
     expressions=[
@@ -3435,7 +3427,7 @@ DIA = VirtualAvatar(
             label="슬픔",
             when="속상하거나 서운할 때. 미안하다고 할 때. 상대가 아파 보일 때. "
                  "울음까지 갈 것 없이, 마음이 내려앉는 정도면 이 얼굴이다.",
-            blendshapes={"sorrow": 0.8},
+            blendshapes={"sorrow": 1.0},
             reply_emoji=["😭", "😢", "🥺", "ㅠㅠ", "ㅜㅜ", "슬퍼"],
             live_triggers=["미안해", "미안", "속상", "서운", "외로", "쓸쓸", "그리워", "울고 싶", "힘들었", "😭", "😢", "🥺", "ㅠㅠ", "ㅜㅜ", "슬퍼"],
             hold_ms=3000,
@@ -3446,7 +3438,7 @@ DIA = VirtualAvatar(
             label="화남",
             when="선을 넘었을 때. 하지 말라고 할 때. 무시당했다고 느낄 때. "
                  "속으로 삭이는 게 아니라 드러내는 얼굴이다.",
-            blendshapes={"angry": 0.8},
+            blendshapes={"angry": 1.0},
             reply_emoji=["😡", "😠", "💢", "화나", "짜증"],
             live_triggers=["하지 마", "하지마", "그만해", "싫어", "미워", "됐어", "😡", "😠", "💢", "화나", "짜증"],
             hold_ms=3000,
@@ -3457,39 +3449,18 @@ DIA = VirtualAvatar(
             label="놀람",
             when="예상 못 한 말을 들었을 때. 갑자기 닿았을 때. "
                  "짧게 스치는 얼굴이라 오래 두면 어색해진다.",
-            # VRM 파일마다 이름이 다르므로 런타임에 찾는다.
-            blendshapes={},
-            auto_detect="surprised",
-            auto_weight=0.8,
-            fallback_blendshapes={"joy": 0.18, "fun": 0.12},
+            blendshapes={"Surprised": 1.0},
             reply_emoji=["😲", "😮", "😯", "😳", "헐", "대박", "진짜?"],
             live_triggers=["깜짝", "세상에", "설마", "그럴 리", "😲", "😮", "😯", "😳", "헐", "대박", "진짜?"],
             hold_ms=1000,
         ),
 
-        # 즐거움이 먼저 온다. 순서가 곧 우선순위다 —
-        # detect_expression 은 먼저 정의된 표정에서 멈춘다.
-        #
-        # 다이아의 말에는 'ㅋㅋ'가 거의 늘 붙는다. 웃음소리를 앞에 두면
-        # "너무 좋아 ㅋㅋ" 같은 말이 전부 웃음 쪽으로 넘어간다.
-        # 웃음소리는 추임새에 가깝고, 애정을 드러낸 말이면 그쪽이 먼저다.
-        #
-        # 어느 얼굴을 쓸지는 파일에 있는 모양이 정한다.
-        # avatar.vrm 에서는 즐거움(fun)이 잔잔한 미소에 어울리고
-        # 기쁨(joy)이 크게 웃는 얼굴이라, 신호를 그렇게 나눴다.
-        # 세기도 그에 맞춘다 — 평소 미소는 0.8, 크게 웃을 때는 1.0.
         Expression(
             key="fun",
             label="즐거움",
             when="평소의 미소. 반갑고 다정할 때, 마음이 놓일 때. "
                  "크게 웃는 것이 아니라 잔잔히 번지는 얼굴이다.",
-            # 두 얼굴을 겹쳐 짓는다.
-            #
-            # avatar.vrm 에서 기쁨과 즐거움은 모양이 93~95% 같은 방향이라,
-            # 겹치면 같은 웃음이 더 깊어진다. 다만 두 배로 밀면 입이
-            # 늘어져 보이므로, 제 얼굴을 주로 쓰고 다른 쪽은 조금만 얹는다.
-            blendshapes={"fun": 0.8, "joy": 0.25},
-            # 평소의 미소. 애정과 반가움이 여기다.
+            blendshapes={"fun": 1.0},
             reply_emoji=["🥰", "😊", "🤗", "💖", "좋아", "행복", "사랑",
                          "보고 싶", "보고싶", "설레", "다행"],
             live_triggers=["🥰", "😊", "🤗", "💖", "좋아", "행복", "사랑",
@@ -3502,9 +3473,7 @@ DIA = VirtualAvatar(
             label="기쁨",
             when="소리 내어 웃을 때. 재미있거나 신날 때, 장난칠 때. "
                  "잔잔한 미소로는 모자란 순간이다.",
-            # 크게 웃을 때도 두 얼굴을 겹친다. 이쪽은 기쁨이 주다.
-            blendshapes={"joy": 1.0, "fun": 0.4},
-            # 크게 웃을 때. 웃음소리와 '재밌다'가 여기다.
+            blendshapes={"joy": 1.0},
             reply_emoji=["🤣", "😄", "😆", "😜", "😝", "😋", "ㅋㅋ", "ㅎㅎ",
                          "재밌", "재미있", "웃겨", "웃긴", "메롱"],
             live_triggers=["🤣", "😄", "😆", "😜", "😝", "😋", "ㅋㅋ", "ㅎㅎ",
@@ -3519,24 +3488,12 @@ DIA = VirtualAvatar(
             hold_ms=0,
         ),
 
-        # ----------------------------------------------------
-        # 눈으로 짓는 표정
-        #
-        # 이 모델(static/avatar.vrm)이 blink / blink_l / blink_r 을
-        # 가지고 있는 것을 확인하고 추가했다.
-        #
-        # 답변 전체의 감정으로는 고르지 않는다. 감정이 아니라 몸짓에 가깝다.
-        # 대신 이모지 표시로 그 자리에서 지을 수 있다.
-        # ----------------------------------------------------
-
         Expression(
             key="wink",
             label="윙크",
             when="둘만 아는 것을 말할 때. 농담이나 장난을 던지고 "
                  "'알지?' 하고 넘길 때. 짓궂지만 미움받지 않는 얼굴이다.",
-            # 한쪽 눈을 완전히 감으면 윙크가 아니라 찡그린 것이 된다.
-            # 반쯤만 감는다.
-            blendshapes={"blink_l": 0.55, "joy": 0.35},
+            blendshapes={"blink_l": 1.0},
             live_triggers=["😉", "비밀이야", "비밀인데", "농담이야", "장난이야", "우리끼리", "알지?"],
             hold_ms=1200,
             is_reply_emotion=False,
@@ -3545,8 +3502,7 @@ DIA = VirtualAvatar(
         Expression(
             key="wink_r",
             label="반대쪽 윙크",
-            # 윙크와 같은 값으로 둔다. 완전히 감으면 찡그린 것이 된다.
-            blendshapes={"blink_r": 0.55, "joy": 0.35},
+            blendshapes={"blink_r": 1.0},
             hold_ms=1200,
             is_reply_emotion=False,
         ),
@@ -3558,17 +3514,6 @@ DIA = VirtualAvatar(
                  "또는 가슴 깊은 데 있던 진심을 꺼낼 때. "
                  "눈을 감으면 상대가 보이지 않으니 꾸미지 않는다는 표시가 된다.",
             blendshapes={"blink": 1.0},
-
-            # 눈을 감고 말하는 것은 웃음이나 슬픔 같은 기분이 아니다.
-            #
-            # 둘 중 하나다.
-            #   하나. 상대를 받아들일 때 — 괜찮다고, 알겠다고 하는 말.
-            #   둘.  가슴 깊은 데 있던 진심을 꺼낼 때.
-            # 눈을 감으면 상대를 보지 않게 되니, 꾸미지 않고 말한다는
-            # 표시가 된다. 그래서 이 얼굴은 맑고 깨끗한 느낌을 준다.
-            #
-            # 아무 데서나 나오면 그 느낌이 죽는다. 그래서 저 두 가지에
-            # 해당하는 말에만 걸리도록 신호를 좁게 적는다.
             live_triggers=[
                 "😌",
                 # 받아들이는 말
@@ -3578,334 +3523,10 @@ DIA = VirtualAvatar(
                 "진심이야", "진심이에요", "솔직히", "사실은", "사실 말이야",
                 "마음 깊", "속마음",
             ],
-            # 진심을 말하는 동안은 눈을 뜨지 않는다. 짧으면 스치고 만다.
             hold_ms=2600,
             is_reply_emotion=False,
         ),
 
-        # ------------------------------------------------------------
-        # 부위별 모프를 직접 쓰는 표정들.
-        #
-        # VRM 이 내주는 표정 그룹 14개로는 못 만드는 얼굴이다.
-        # 얼굴 메시의 모프 타깃 57개 중 안 쓰이던 43개를 골라 조합했다.
-        # ------------------------------------------------------------
-
-        Expression(
-            key="hollow",
-            label="빈 눈",
-            is_reply_emotion=False,
-            # 눈에서 하이라이트만 지운다. 표정은 그대로인데 눈만 죽는다.
-            morphs={"Fcl_EYE_Highlight_Hide": 1.0},
-            hold_ms=4000,
-        ),
-
-        Expression(
-            key="hollow_smile",
-            label="빈 눈으로 웃기",
-            is_reply_emotion=False,
-            blendshapes={"joy": 0.5},
-            morphs={
-                "Fcl_EYE_Highlight_Hide": 1.0,
-                "Fcl_MTH_Joy": 0.7,
-            },
-            hold_ms=4000,
-        ),
-
-        Expression(
-            key="forced_smile",
-            label="억지웃음",
-            is_reply_emotion=False,
-            # 입은 웃는데 눈썹은 슬프다. 사람이 참을 때 짓는 얼굴이다.
-            morphs={
-                "Fcl_MTH_Joy": 0.85,
-                "Fcl_BRW_Sorrow": 0.8,
-                "Fcl_EYE_Sorrow": 0.35,
-            },
-            hold_ms=3500,
-        ),
-
-        Expression(
-            key="wide_eyes",
-            label="눈 크게 뜨기",
-            is_reply_emotion=False,
-            morphs={
-                "Fcl_EYE_Spread": 1.0,
-                "Fcl_BRW_Surprised": 0.6,
-            },
-            hold_ms=1600,
-        ),
-
-        Expression(
-            key="pout",
-            label="삐죽",
-            is_reply_emotion=False,
-            morphs={
-                "Fcl_MTH_Down": 0.8,
-                "Fcl_MTH_Small": 0.5,
-                "Fcl_BRW_Sorrow": 0.55,
-            },
-            hold_ms=3000,
-        ),
-
-        # ------------------------------------------------------------
-        # 절정 표정 — 표현용.vrm 의 얼굴에서 짓는다.
-        #
-        # 같은 이름의 모프인데 표현용 쪽이 더 과장돼 있다.
-        # (화남 1.02cm, 즐거움 1.45cm 만큼 더 크게 움직인다)
-        # 평소에는 기본 얼굴을 쓰고, 이 표정을 지을 때만 얼굴을 바꿔 낀다.
-        #
-        # 표현용 얼굴에서는 입모양(아이우에오)과 눈감기·윙크를 쓰지 않는다.
-        # 그건 기본 얼굴이 맡는다.
-        # ------------------------------------------------------------
-
-
-        # ----------------------------------------------------
-        # 만화·애니메이션의 얼굴
-        #
-        # 여기까지는 '감정 하나 = 얼굴 하나'였다. 그런데 만화는 감정을
-        # 그렇게 그리지 않는다. 웃는데 눈에 빛이 없거나, 화났는데 입꼬리가
-        # 한쪽만 올라가거나, 눈물이 고인 채 웃는 얼굴이 따로 있다.
-        # 그 어긋남이 곧 뜻이다.
-        #
-        # VRM 이 겉으로 내주는 표정 그룹은 6개뿐이지만 얼굴 메시에는
-        # 조각이 57개 들어 있다. 눈썹·눈·입·이를 따로 움직일 수 있으니
-        # 그것들을 겹쳐 만화의 얼굴을 만든다.
-        #
-        # 쓸 수 있는 조각
-        #   눈썹  Angry Fun Joy Sorrow Surprised
-        #   눈    Natural Angry Close Close_R/L Fun Joy Joy_R/L Sorrow
-        #         Surprised Spread(크게) Iris_Hide(눈동자) Highlight_Hide(빛)
-        #   입    Up Down Angry Small Large Fun Joy Sorrow Surprised
-        #         SkinFung(이 드러냄) SkinFung_R/L(한쪽만)
-        #   이    Fung1~3 Short (드러나는 정도)
-        #
-        # 답변 전체의 감정으로는 쓰지 않는다(is_reply_emotion=False).
-        # 이 얼굴들은 저절로 나오는 게 아니라 골라 짓는 것이기 때문이다.
-        # ----------------------------------------------------
-
-        Expression(
-            key="eye_smile", label="눈웃음",
-            when="정말 반가울 때. 눈이 초승달처럼 접히는 웃음이라 "
-                 "입만 웃는 것과 달리 속이는 느낌이 없다.",
-            morphs={
-                "Fcl_EYE_Joy": 1.0,
-                "Fcl_MTH_Fun": 0.7,
-                "Fcl_BRW_Joy": 0.6,
-            },
-            live_triggers=["반가워", "보고싶었어", "역시 너"],
-            hold_ms=2800, is_reply_emotion=False,
-        ),
-
-        Expression(
-            key="drowsy", label="잠결",
-            when="막 잠에서 깨어 아직 정신이 안 든 얼굴. "
-                 "눈이 반쯤만 뜨이고 입이 조금 벌어져 있다. "
-                 "깨우고 나서 대답이 나오기 전까지의 얼굴이다.",
-            morphs={
-                # 눈을 절반만 감는다. 1.0 이면 다시 자는 것이 된다.
-                "Fcl_EYE_Close": 0.55,
-                # 눈썹은 힘이 풀려 처진다
-                "Fcl_BRW_Sorrow": 0.35,
-                # 입이 조금 벌어져 있다. 가로로는 안 늘어난다.
-                "Fcl_MTH_A": 0.22,
-            },
-            # 신호 낱말은 안 붙인다. 이 얼굴은 대화 내용이 아니라
-            # '방금 깼다'는 상황이 부른다. 낱말을 붙이면 대화 중에
-            # 엉뚱한 데서 튀어나온다.
-            hold_ms=2600, is_reply_emotion=False,
-        ),
-
-        Expression(
-            key="glare", label="째려보기",
-            when="의심스러울 때. 못마땅한데 아직 말은 안 할 때. "
-                 "눈만 가늘어지고 입은 다물려 있다.",
-            morphs={
-                "Fcl_EYE_Angry": 1.0,
-                "Fcl_EYE_Close": 0.3,
-                "Fcl_BRW_Angry": 0.5,
-                "Fcl_MTH_Small": 0.6,
-            },
-            live_triggers=["진짜야?", "수상한데", "거짓말", "정말로?"],
-            hold_ms=2400, is_reply_emotion=False,
-        ),
-
-        Expression(
-            key="huff", label="새침",
-            when="속으로는 신경 쓰이면서 아닌 척할 때. "
-                 "고개를 돌리는 몸짓과 같이 나오면 뜻이 산다.",
-            morphs={
-                "Fcl_BRW_Angry": 0.35,
-                "Fcl_EYE_Close": 0.45,
-                "Fcl_MTH_Up": 0.5,
-                "Fcl_MTH_Small": 0.4,
-            },
-            live_triggers=["흥", "됐거든", "관심 없어", "누가 뭐래"],
-            hold_ms=2200, is_reply_emotion=False,
-        ),
-
-        Expression(
-            key="fluster", label="당황",
-            when="말문이 막혔을 때. 눈이 커지고 눈동자가 흔들린다. "
-                 "부끄러움과는 다르다 — 이건 어쩔 줄 모르는 얼굴이다.",
-            morphs={
-                "Fcl_EYE_Spread": 0.8,
-                "Fcl_BRW_Sorrow": 0.7,
-                "Fcl_MTH_Large": 0.35,
-                "Fcl_EYE_Highlight_Hide": 0.25,
-            },
-            live_triggers=["어어", "그게", "아니 그", "잠깐만"],
-            hold_ms=1800, is_reply_emotion=False,
-        ),
-
-        Expression(
-            key="teary", label="눈물 고임",
-            when="울음이 터지기 직전. 눈이 커진 채 눈썹만 내려간다. "
-                 "참고 있어서 더 크게 보이는 얼굴이다.",
-            morphs={
-                "Fcl_EYE_Spread": 0.55,
-                "Fcl_EYE_Sorrow": 0.5,
-                "Fcl_BRW_Sorrow": 1.0,
-                "Fcl_MTH_Small": 0.5,
-            },
-            live_triggers=["울 것 같아", "눈물 나", "참고 있", "울컥"],
-            hold_ms=3000, is_reply_emotion=False,
-        ),
-
-        Expression(
-            key="wail", label="울음",
-            when="참지 못하고 터졌을 때. 눈을 꽉 감고 입을 크게 벌린다.",
-            morphs={
-                "Fcl_EYE_Close": 1.0,
-                "Fcl_BRW_Sorrow": 1.0,
-                "Fcl_MTH_Large": 0.8,
-                "Fcl_MTH_Sorrow": 0.6,
-                "Fcl_HA_Fung1": 0.4,
-            },
-            live_triggers=["으앙", "엉엉", "흑흑"],
-            hold_ms=3200, is_reply_emotion=False,
-        ),
-
-        Expression(
-            key="grin", label="헤벌쭉",
-            when="마음이 다 풀렸을 때. 감추지 않고 입이 벌어지는 웃음. "
-                 "예쁘게 웃는 것이 아니라 흐물흐물해지는 얼굴이다.",
-            morphs={
-                # MTH_Large 는 가로로 0.84cm 벌린다. 그래서 줄이고,
-                # 가로는 거의 안 늘면서 입을 여는 MTH_A 를 올린다.
-                "Fcl_MTH_A": 0.85,
-                "Fcl_MTH_Large": 0.3,
-                "Fcl_HA_Fung1": 0.75,
-                "Fcl_EYE_Joy": 0.65,
-                "Fcl_BRW_Joy": 0.5,
-            },
-            live_triggers=["헤헤", "히히", "좋다아"],
-            hold_ms=2800, is_reply_emotion=False,
-        ),
-
-        Expression(
-            key="gloom", label="시무룩",
-            when="크게 슬프지는 않은데 기운이 빠졌을 때. "
-                 "눈썹과 입꼬리가 같이 내려간다.",
-            morphs={
-                # MTH_Down 은 입 가운데를 1.4cm 나 끌어내려서
-                # 입꼬리가 아니라 입 전체가 처진다. MTH_Sorrow 가
-                # 입꼬리 쪽이라 그걸 쓴다.
-                "Fcl_MTH_Sorrow": 1.0,
-                "Fcl_MTH_Small": 0.3,
-                "Fcl_BRW_Sorrow": 0.8,
-                "Fcl_EYE_Sorrow": 0.4,
-            },
-            live_triggers=["시무룩", "기운 없", "재미없", "심심해"],
-            hold_ms=2600, is_reply_emotion=False,
-        ),
-
-        Expression(
-            key="shock", label="경악",
-            when="믿기지 않을 때. 눈이 끝까지 열리고 빛이 빠진다. "
-                 "놀람보다 한 단계 위다.",
-            morphs={
-                "Fcl_EYE_Spread": 1.0,
-                "Fcl_BRW_Surprised": 1.0,
-                "Fcl_MTH_Surprised": 0.8,
-                "Fcl_EYE_Highlight_Hide": 0.55,
-            },
-            live_triggers=["말도 안", "거짓말이지", "그럴 리가"],
-            hold_ms=1600, is_reply_emotion=False,
-        ),
-
-        Expression(
-            key="sigh_face", label="체념",
-            when="더 따질 마음이 없어졌을 때. 눈을 감고 한숨을 쉬는 얼굴. "
-                 "화가 풀린 것이 아니라 접은 것이다.",
-            morphs={
-                "Fcl_EYE_Close": 0.8,
-                "Fcl_BRW_Sorrow": 0.5,
-                "Fcl_MTH_Down": 0.35,
-            },
-            live_triggers=["하아", "됐다 그래", "말을 말자", "어쩔 수 없"],
-            hold_ms=2400, is_reply_emotion=False,
-        ),
-
-        Expression(
-            key="soft_gaze", label="지그시 보기",
-            when="말없이 바라볼 때. 눈이 반쯤 감기고 입꼬리만 조금 올라간다. "
-                 "가장 조용한 애정 표현이다.",
-            morphs={
-                "Fcl_EYE_Close": 0.35,
-                "Fcl_MTH_Up": 0.45,
-                "Fcl_BRW_Joy": 0.3,
-            },
-            live_triggers=["가만히", "그냥 보고", "이렇게 있"],
-            hold_ms=3000, is_reply_emotion=False,
-        ),
-
-        Expression(
-            key="peak_joy", label="절정 기쁨", source="special",
-            blendshapes={"joy": 1.0, "fun": 0.4},
-            # 표현용 얼굴을 안 쓸 때도 절정으로 보여야 한다.
-            # 표정 그룹만으로는 기쁨(1.0)과 똑같아져서 구별이 안 된다.
-            #
-            # 다만 겹치는 조각을 얹으면 안 된다. ALL_* 안에는 이미 부위
-            # 모프가 들어 있어서(입 0.87, 눈 0.50 만큼 같은 방향),
-            # EYE_Joy 나 MTH_Joy 를 또 얹으면 그 자리가 두 배로 밀려
-            # 얼굴이 일그러진다. 실제로 1.6~2.5배까지 부풀었었다.
-            #
-            # 그래서 ALL_* 이 하지 않는 것만 얹는다 —
-            # 입을 더 벌리기, 이 드러내기, 눈 크게, 빛 지우기.
-            # 지금은 보통 표정의 1.1~1.45배에서 멈춘다.
-            morphs={"Fcl_MTH_Large": 0.45, "Fcl_HA_Fung1": 0.6},
-            is_reply_emotion=False, hold_ms=3500,
-        ),
-        Expression(
-            key="peak_fun", label="절정 즐거움", source="special",
-            blendshapes={"fun": 1.0, "joy": 0.35},
-            morphs={"Fcl_MTH_Large": 0.3, "Fcl_HA_Fung1": 0.45,
-                    "Fcl_EYE_Spread": 0.15},
-            is_reply_emotion=False, hold_ms=3500,
-        ),
-        Expression(
-            key="peak_angry", label="절정 화남", source="special",
-            blendshapes={"angry": 1.0},
-            morphs={"Fcl_BRW_Angry": 0.25, "Fcl_HA_Fung1": 0.35,
-                    "Fcl_EYE_Highlight_Hide": 0.3},
-            is_reply_emotion=False, hold_ms=3500,
-        ),
-        Expression(
-            # 눈동자를 반쯤 지우던 것(EYE_Iris_Hide 0.3)을 뺐다.
-            # 눈이 지워지다 만 것처럼 보여서 슬픔이 아니라 고장으로 읽혔다.
-            # 대신 입가를 내려 슬픔을 깊게 한다.
-            key="peak_sorrow", label="절정 슬픔", source="special",
-            blendshapes={"sorrow": 1.0},
-            morphs={"Fcl_BRW_Sorrow": 0.35, "Fcl_MTH_Sorrow": 0.5},
-            is_reply_emotion=False, hold_ms=3500,
-        ),
-        Expression(
-            key="peak_surprised", label="절정 놀람", source="special",
-            auto_detect="surprised", auto_weight=1.0,
-            fallback_blendshapes={"surprised": 1.0},
-            morphs={"Fcl_EYE_Spread": 0.7, "Fcl_EYE_Highlight_Hide": 0.5},
-            is_reply_emotion=False, hold_ms=2000,
-        ),
     ],
 
     # --------------------------------------------------------
@@ -3939,7 +3560,7 @@ DIA = VirtualAvatar(
                 "fun": ["Fcl_EYE_Fun", "Fcl_BRW_Fun"],
                 "angry": ["Fcl_EYE_Angry", "Fcl_BRW_Angry"],
                 "sorrow": ["Fcl_EYE_Sorrow", "Fcl_BRW_Sorrow"],
-                "surprised": ["Fcl_EYE_Surprised", "Fcl_BRW_Surprised"],
+                "Surprised": ["Fcl_EYE_Surprised", "Fcl_BRW_Surprised"],
             },
             # 만화 표정처럼 조각으로 만든 얼굴에서는 이 조각들만 빼둔다
             "mouth_prefixes": ["Fcl_MTH_", "Fcl_HA_"],
@@ -3987,8 +3608,6 @@ DIA = VirtualAvatar(
                 "neutral": 0.0,
                 "fun": 0.0032,
                 "joy": 0.0044,
-                "peak_fun": 0.0040,
-                "peak_joy": 0.0048,
             },
         },
 
@@ -4030,7 +3649,7 @@ DIA = VirtualAvatar(
                 {
                     "at": 1,
                     "label": "조금 상함",
-                    "expression": "pout",
+                    "expression": "angry",
                     "note": "조금 상해 있다. 말은 하지만 평소보다 짧고, "
                             "먼저 다가가지 않는다. 상대가 달래면 못 이기는 척 풀린다.",
                     "soothed": {
@@ -4049,7 +3668,7 @@ DIA = VirtualAvatar(
                             "왜 그러냐고 물으면 아무것도 아니라고 한다. "
                             "쉽게 풀리지 않지만, 계속 달래면 조금씩 누그러진다.",
                     "soothed": {
-                        "expression": "pout",
+                        "expression": "angry",
                         "lines": {
                             "polite": ["…아직 다 안 풀렸어요.", "이런다고 넘어갈 줄 알았어요?"],
                             "casual": ["…아직 다 안 풀렸어.", "이런다고 넘어갈 줄 알아?"],
@@ -4190,7 +3809,7 @@ DIA = VirtualAvatar(
             },
             {
                 "kind": "pout",
-                "expression": "pout",
+                "expression": "angry",
                 "motion": "cross",
                 "linger_ms": 600,
                 "words": ["삐졌", "삐질", "흥", "치사", "몰라", "서운"],
@@ -4262,63 +3881,59 @@ DIA = VirtualAvatar(
 
             # --- 우는 얼굴 ---
             {"words": ["울음을 터", "엉엉", "울어 버", "흐느"],
-             "expression": "wail"},
+             "expression": "sorrow"},
             {"words": ["눈물이 고", "눈물이 맺", "글썽", "눈시울",
-                       "울먹", "훌쩍"], "expression": "teary"},
+                       "울먹", "훌쩍"], "expression": "sorrow"},
 
             # --- 웃는 얼굴. 좁은 것부터 ---
             {"words": ["눈웃음", "눈이 초승달", "눈이 접"],
-             "expression": "eye_smile"},
-            {"words": ["헤벌", "헤실", "입이 귀에"], "expression": "grin"},
+             "expression": "joy"},
+            {"words": ["헤벌", "헤실", "입이 귀에"], "expression": "joy"},
             {"words": ["억지로 웃", "억지웃음", "쓴웃음", "씁쓸",
-                       "웃는 시늉"], "expression": "forced_smile"},
+                       "웃는 시늉"], "expression": "fun"},
             {"words": ["눈은 웃지 않", "눈이 웃지 않", "눈에 빛이 없는 채로 웃"],
-             "expression": "hollow_smile"},
+             "expression": "fun"},
             {"words": ["웃음을 터", "크게 웃", "활짝 웃", "깔깔", "박장"],
              "expression": "joy"},
             {"words": ["웃", "미소", "입꼬리가 올라", "입꼬리를 올"],
              "expression": "fun"},
 
-            # --- 빈 눈 ---
-            {"words": ["초점이 없", "초점을 잃", "눈에 빛이 없", "빈 눈",
-                       "텅 빈"], "expression": "hollow"},
-
             # --- 놀란 얼굴 ---
             # 사람 말에 진짜로 놀란 때만이다. 이 규칙은 위에서 정한 것과
             # 같다 — 잠에서 깰 때, 부끄러울 때, 진짜 놀랐을 때.
             {"words": ["입을 떡", "말문이 막", "얼어붙", "경악"],
-             "expression": "shock"},
+             "expression": "surprised"},
             {"words": ["흠칫", "화들짝", "움찔", "화들"],
              "expression": "surprised"},
             {"words": ["눈을 크게", "눈이 커", "눈을 동그랗", "눈을 휘둥"],
-             "expression": "wide_eyes"},
+             "expression": "surprised"},
 
             # --- 흔들리는 얼굴 ---
             {"words": ["눈동자가 흔들", "시선이 흔들", "눈길을 피", "눈을 피",
                        "말을 더듬", "어쩔 줄", "허둥", "당황"],
-             "expression": "fluster"},
+             "expression": "surprised"},
 
             # --- 가라앉는 얼굴 ---
             {"words": ["어깨가 처", "풀이 죽", "시무룩", "고개를 숙",
-                       "고개가 떨"], "expression": "gloom"},
+                       "고개가 떨"], "expression": "sorrow"},
             {"words": ["한숨", "체념", "포기한 듯", "고개를 저으며 웃"],
-             "expression": "sigh_face"},
+             "expression": "sorrow"},
 
             # --- 뾰족한 얼굴 ---
             {"words": ["볼을 부풀", "입술을 내밀", "삐죽", "삐친", "삐져"],
-             "expression": "pout"},
+             "expression": "angry"},
             {"words": ["새침", "톡 쏘", "쌀쌀맞", "콧방귀", "흥,"],
-             "expression": "huff"},
+             "expression": "angry"},
             {"words": ["째려", "노려", "눈을 가늘", "눈초리"],
-             "expression": "glare"},
+             "expression": "angry"},
 
             # --- 조용한 얼굴 ---
             {"words": ["지그시", "물끄러미", "빤히", "가만히 바라",
                        "오래 바라", "오래 본", "말없이 바라", "가만히 본",
-                       "말없이 본"], "expression": "soft_gaze"},
+                       "말없이 본"], "expression": "fun"},
             {"words": ["눈을 감", "눈을 지그시 감"], "expression": "eyes_closed"},
             {"words": ["하품", "졸린", "졸음", "눈을 비비"],
-             "expression": "drowsy"},
+             "expression": "eyes_closed"},
 
             # --- 남은 감정들 ---
             {"words": ["울컥", "서러", "속상", "슬픈 얼굴", "울 것 같"],
@@ -5008,7 +4623,7 @@ DIA = VirtualAvatar(
             duration=2.9,
             loop=False,
             # 삐죽은 혼자 쓰면 어색하다. 몸짓과 같이 나와야 뜻이 산다.
-            expression="pout",
+            expression="angry",
             # 팔짱을 낀 채 머무는 자리
             hold_t=2.2,
             keys=[
@@ -5154,7 +4769,7 @@ DIA = VirtualAvatar(
             description="등을 돌린다. 삐쳤거나 더 말하기 싫을 때",
             duration=3.4,
             loop=False,
-            expression="pout",
+            expression="angry",
             turn_yaw=150,
             # 2.6초 지점이 등을 돌린 채 가장 오래 머무는 자리다.
             # 마음이 큰 만큼 여기서 더 서 있는다.
@@ -5334,7 +4949,7 @@ DIA = VirtualAvatar(
             },
 
             "decline": {
-                "expression": "fluster",
+                "expression": "surprised",
                 "motion": "cover",
                 "affinity": 0,
                 "lines": {
@@ -5361,7 +4976,7 @@ DIA = VirtualAvatar(
             # 받아들이는 쪽 대사와 나누어 둔다. 먼저 말을 꺼내는 사람은
             # 확신에 차 있지 않다 — 그 머뭇거림이 이 말들에 있어야 한다.
             "ask": {
-                "expression": "fluster",
+                "expression": "surprised",
                 "motion": "shy",
                 "lines": {
                     "casual": [
@@ -5408,7 +5023,7 @@ DIA = VirtualAvatar(
 
             # 호감이 바닥나 저절로 끝나는 경우
             "faded": {
-                "expression": "gloom",
+                "expression": "sorrow",
                 "motion": None,
                 "lines": {
                     "casual": [
@@ -5420,7 +5035,7 @@ DIA = VirtualAvatar(
 
             # 헤어진 뒤에 다시 사귀자고 하면
             "again": {
-                "expression": "fluster",
+                "expression": "surprised",
                 "lines": {
                     "casual": [
                         "…또? 생각할 시간 좀 줘.",
@@ -5967,7 +5582,7 @@ DIA = VirtualAvatar(
             # 사람이 잘못 냈을 때. 까닭마다 다르게 말한다 —
             # 뭐가 틀렸는지 모르면 같은 실수를 또 한다.
             "wrong": {
-                "expression": "fluster",
+                "expression": "surprised",
                 "lines": {
                     "안이어짐": {
                         "polite": ["{head_ro} 시작해야죠.",
@@ -6220,7 +5835,7 @@ DIA = VirtualAvatar(
 
             # 다이아가 아닌데 쳤다
             "dia_wrong": {
-                "expression": "fluster",
+                "expression": "surprised",
                 "motion": "cover",
                 "affinity": 1,
                 "lines": {
@@ -6484,7 +6099,7 @@ DIA = VirtualAvatar(
 
                 # 다이아가 이겼다. 자기가 고른다.
                 "dia_won": {
-                    "expression": "grin",
+                    "expression": "joy",
                     "lines": {
                         "polite": [
                             "제가 이겼어요. 그럼 제가 먼저 둘게요. (다이아 선공)",
@@ -6499,7 +6114,7 @@ DIA = VirtualAvatar(
 
                 # 사람이 이겼다. 고르라고 한다.
                 "you_won": {
-                    "expression": "pout",
+                    "expression": "angry",
                     "lines": {
                         "polite": [
                             "졌네요. 먼저 두실래요, 나중에 두실래요? (흰 말 = 선공)",
@@ -6552,7 +6167,7 @@ DIA = VirtualAvatar(
 
                 # 다이아 말이 잡혔다
                 "lost": {
-                    "expression": "pout", "say": 0.45,
+                    "expression": "angry", "say": 0.45,
                     "lines": {
                         "polite": [
                             "어… 그걸 보셨네요.",
@@ -6569,7 +6184,7 @@ DIA = VirtualAvatar(
 
                 # 다이아가 장군을 불렀다
                 "check_given": {
-                    "expression": "grin", "say": 1.0,
+                    "expression": "joy", "say": 1.0,
                     "lines": {
                         "polite": ["체크예요.", "장군이에요. 조심하세요."],
                         "casual": ["체크.", "장군. 조심해."],
@@ -6651,7 +6266,7 @@ DIA = VirtualAvatar(
 
                 # 서로 말이 모자라 이길 수가 없다
                 "draw_material": {
-                    "expression": "sigh_face", "say": 1.0, "affinity": 1,
+                    "expression": "sorrow", "say": 1.0, "affinity": 1,
                     "lines": {
                         "polite": [
                             "말이 모자라서 더는 못 이겨요. 무승부예요.",
@@ -6666,7 +6281,7 @@ DIA = VirtualAvatar(
 
                 # 너무 오래 끌었다
                 "draw_long": {
-                    "expression": "sigh_face", "say": 1.0, "affinity": 1,
+                    "expression": "sorrow", "say": 1.0, "affinity": 1,
                     "lines": {
                         "polite": [
                             "너무 오래 끌었네요. 규칙상 무승부예요.",
@@ -6681,7 +6296,7 @@ DIA = VirtualAvatar(
 
                 # 사람이 그만두겠다고 했다
                 "resign": {
-                    "expression": "pout", "say": 1.0,
+                    "expression": "angry", "say": 1.0,
                     "lines": {
                         "polite": ["벌써 그만두시게요?", "아쉬워요. 다음에 또 해요."],
                         "casual": ["벌써 그만해?", "아쉽다. 다음에 또 하자."],
@@ -7258,7 +6873,7 @@ DIA = VirtualAvatar(
                 label="머리",
                 bones=["head"],
                 tap={
-                    "expression": "fluster", "motion": "nod", "affinity": 1,
+                    "expression": "surprised", "motion": "nod", "affinity": 1,
                     "lines": {
                         "polite": ["어… 왜 그러세요?", "머리는… 좀 부끄러운데요."],
                         "casual": ["어? 왜…", "머리 만지는 거야?"],
@@ -7326,7 +6941,7 @@ DIA = VirtualAvatar(
                 bones=[],            # head_split 이 정한다
                 allow_from=40,
                 tap={
-                    "expression": "fluster",
+                    "expression": "surprised",
                     "expression_warm": ["joy", "fun"],
                     "motion": "nod",
                     "affinity": 1,
@@ -7403,7 +7018,7 @@ DIA = VirtualAvatar(
                 bones=["leftUpperArm", "rightUpperArm",
                        "leftLowerArm", "rightLowerArm"],
                 tap={
-                    "expression": "fluster",
+                    "expression": "surprised",
                     "expression_warm": ["joy", "fun"], "motion": "nod", "affinity": 1,
                     "lines": {
                         "polite": ["팔은 왜요?", "네?"],
@@ -7431,7 +7046,7 @@ DIA = VirtualAvatar(
                        "leftLittleProximal", "rightLittleProximal"],
                 allow_from=-20,
                 tap={
-                    "expression": "fluster",
+                    "expression": "surprised",
                     # 놀란 뒤 곧 좋아하는 얼굴이 된다.
                     # 손을 잡혔다고 얼굴을 가리지는 않는다.
                     "expression_then": "fun", "motion": None, "affinity": 2,
@@ -7561,7 +7176,7 @@ DIA = VirtualAvatar(
                 cloth=True,
                 allow_from=40,
                 tap={
-                    "expression": "fluster",
+                    "expression": "surprised",
                     "expression_warm": ["joy", "fun"],
                     # 광기부터다. 만지면 화내던 자리라
                     # 다른 곳(80)보다 훨씬 깊어져야 웃는다.

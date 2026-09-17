@@ -1,125 +1,114 @@
 # _verify_expressions.py
-# 표정이 그대로인지 본다.
+# 표정이 아바타 파일과 맞는지 본다.
 #
-# 표정 수치는 사람이 눈으로 보고 하나하나 맞춘 값이다.
-# 계산으로 나온 것이 아니라서, 한 번 어긋나면 되돌릴 근거가 없다.
-# 그래서 잠근 날의 값을 떠 두고(_expressions_locked.json) 여기서 대조한다.
+# 2026-09-17 에 옛 아바타에서 맞춘 수치를 지우고, 기본 표정을 아바타 파일
+# (static/avatar.vrm)의 표정 그룹 그대로 쓰기로 했다. 그래서 잠근 값과
+# 대조하던 것을 그만두고, 파일에 정말 있는 이름인지를 본다.
 #
-# 표정을 새로 만드는 것은 괜찮다. 있던 것이 바뀌는 것만 잡는다.
+#   - 표정이 쓰는 그룹 이름이 파일에 있는가 (없으면 화면에서 조용히 빠진다)
+#   - 표정이 쓰는 조각 이름이 얼굴 메시에 있는가
+#   - 기본 표정의 값이 파일 그대로(100)인가 — 배합기로 덮은 것은 따로 알린다
+#   - 동작·만지기·낱말 표가 부르는 표정이 다 있는가
 #
-#   python _verify_expressions.py          대조만 한다
-#   python _verify_expressions.py --잠금    지금 값으로 다시 떠 둔다
+#   python _verify_expressions.py
 
 import json
 import os
+import re
+import struct
 import sys
 
-sys.path.insert(0, ".")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from avatar import AVATAR, _EXPR_ORIGINAL
 
-LOCK = "_expressions_locked.json"
+HERE = os.path.dirname(os.path.abspath(__file__))
+VRM = os.path.join(HERE, "static", "avatar.vrm")
 
-FIELDS = [
-    "label", "blendshapes", "fallback_blendshapes", "morphs",
-    "auto_detect", "auto_weight", "hold_ms", "source", "is_reply_emotion",
-]
-
-
-def snapshot():
-    # 코드에 적힌 값만 본다. 배합기(expressions_custom.json)에서 만들거나
-    # 덮은 것은 사람이 눈으로 보고 한 일이라 잠금 밖이다.
-    out = {}
-    for e in AVATAR.expressions:
-        orig = _EXPR_ORIGINAL.get(e.key, False)
-        if orig is None:
-            continue
-        out[e.key] = {f: getattr(e, f) for f in FIELDS}
-        if orig:
-            out[e.key].update({f: orig[f] for f in orig if f in FIELDS})
-    return out
+# 기본 표정이 파일의 어느 그룹 하나를 100 으로 쓰는가
+BASE = {
+    "sorrow": "sorrow", "angry": "angry", "surprised": "Surprised",
+    "fun": "fun", "joy": "joy", "wink": "blink_l", "wink_r": "blink_r",
+    "eyes_closed": "blink",
+}
 
 
-def save(now):
-    with open(LOCK, "w", encoding="utf-8") as f:
-        json.dump(
-            {
-                "잠근_날": "2026-08-18",
-                "왜": ("사람이 눈으로 보고 하나하나 맞춘 값이다. "
-                       "다시 계산하거나 어림잡아 바꾸면 안 된다."),
-                "표정_수": len(now),
-                "표정": now,
-            },
-            f, ensure_ascii=False, indent=2,
-        )
+def read_vrm(path):
+    with open(path, "rb") as f:
+        f.read(12)
+        n, _ = struct.unpack("<II", f.read(8))
+        g = json.loads(f.read(n))
+    groups = set()
+    for bg in g["extensions"]["VRM"]["blendShapeMaster"]["blendShapeGroups"]:
+        groups.add(bg["name"])
+        if bg.get("presetName") and bg["presetName"] != "unknown":
+            groups.add(bg["presetName"])
+    morphs = set()
+    for m in g["meshes"]:
+        names = (m.get("extras") or {}).get("targetNames") or \
+            (m["primitives"][0].get("extras") or {}).get("targetNames") or []
+        morphs.update(names)
+    return groups, morphs
 
 
 def main():
-    now = snapshot()
+    fails = []
 
-    if "--잠금" in sys.argv or "--lock" in sys.argv:
-        save(now)
-        print(f"지금 값으로 다시 떠 두었다. 표정 {len(now)}개.")
+    if not os.path.exists(VRM):
+        print("static/avatar.vrm 이 없어 건너뛴다.")
         return 0
 
-    if not os.path.exists(LOCK):
-        save(now)
-        print(f"떠 둔 것이 없어서 지금 값으로 만들었다. 표정 {len(now)}개.")
-        return 0
-
-    with open(LOCK, encoding="utf-8") as f:
-        locked = json.load(f)["표정"]
+    groups, morphs = read_vrm(VRM)
+    keys = {e.key for e in AVATAR.expressions}
 
     print("=" * 66)
-    print("표정이 그대로인가")
+    print(f"표정 {len(keys)}개  /  파일의 그룹 {len(groups)}개 · 조각 {len(morphs)}개")
     print("=" * 66)
 
-    changed = []
-    gone = []
+    for e in AVATAR.expressions:
+        for n in e.blendshapes:
+            if n not in groups:
+                fails.append(f"{e.label}({e.key}): 그룹 '{n}' 이 파일에 없다")
+        for n in e.morphs:
+            if n not in morphs:
+                fails.append(f"{e.label}({e.key}): 조각 '{n}' 이 얼굴에 없다")
 
-    for key, was in locked.items():
-        if key not in now:
-            gone.append((key, was.get("label")))
+    for key, group in BASE.items():
+        e = AVATAR.expression(key)
+        if not e:
+            fails.append(f"기본 표정 {key} 가 없다")
             continue
+        if key in _EXPR_ORIGINAL:
+            continue
+        if e.blendshapes != {group: 1.0} or e.morphs:
+            fails.append(f"{e.label}({key}): 파일 그대로가 아니다 — {e.blendshapes} {e.morphs}")
 
-        for f in FIELDS:
-            a, b = was.get(f), now[key].get(f)
-            if a != b:
-                changed.append((was.get("label"), key, f, a, b))
+    # 부르는 자리
+    src = open(os.path.join(HERE, "avatar.py"), encoding="utf-8").read()
+    src += open(os.path.join(HERE, "main.py"), encoding="utf-8").read()
+    called = set(re.findall(r'expression"\s*:\s*"([a-z_]+)"', src))
+    called |= set(re.findall(r'expression="([a-z_]+)"', src))
+    for k in sorted(called - keys):
+        fails.append(f"없는 표정 '{k}' 을 부르는 자리가 있다")
 
-    added = [(k, v["label"]) for k, v in now.items() if k not in locked]
+    html = open(os.path.join(HERE, "templates", "index.html"), encoding="utf-8").read()
+    for k in sorted(set(re.findall(r"applyExpression\('([a-z_]+)'\)", html)) - keys):
+        fails.append(f"index.html 이 없는 표정 '{k}' 을 부른다")
 
     if _EXPR_ORIGINAL:
-        print(f"\n배합기에서 만들거나 고친 표정 {len(_EXPR_ORIGINAL)}개 (잠금 밖)")
+        print(f"\n배합기에서 만들거나 고친 표정 {len(_EXPR_ORIGINAL)}개")
         for k, o in _EXPR_ORIGINAL.items():
             print(f"   * {k}" + ("  — 새로 만듦" if o is None else "  — 덮어씀"))
 
-    if added:
-        print(f"\n새로 생긴 표정 {len(added)}개 (문제 아님)")
-        for k, lab in added:
-            print(f"   + {lab} ({k})")
-
-    if gone:
-        print(f"\n사라진 표정 {len(gone)}개")
-        for k, lab in gone:
-            print(f"   - {lab} ({k})")
-
-    if changed:
-        print(f"\n바뀐 값 {len(changed)}곳")
-        for lab, key, f, a, b in changed:
-            print(f"   ! {lab} ({key}) 의 {f}")
-            print(f"       잠글 때 {a}")
-            print(f"       지금    {b}")
-
     print()
     print("=" * 66)
-    if changed or gone:
-        print("표정이 달라졌다. 뜻한 것이 아니면 되돌려라.")
-        print("일부러 바꾼 것이면  python _verify_expressions.py --잠금")
+    if fails:
+        for f in fails:
+            print("   ! " + f)
         print("=" * 66)
         return 1
 
-    print(f"표정 {len(locked)}개 모두 잠근 날 그대로다.")
+    print("전부 통과")
     print("=" * 66)
     return 0
 

@@ -83,9 +83,9 @@ check("상황이 남는다", "(살짝 웃으며) 그랬어요?", "(살짝 웃으
       [("expression", "fun")])
 check("상황 + 이름표", "(눈을 피하며) 아니에요 (쑥스러워하기)",
       "(눈을 피하며) 아니에요",
-      [("expression", "fluster"), ("motion", "shy")])
+      [("expression", "surprised"), ("motion", "shy")])
 check("상황만", "(창밖을 오래 본다)", "(창밖을 오래 본다)",
-      [("expression", "soft_gaze")])
+      [("expression", "fun")])
 check("못 읽는 상황은 글자로만", "(머리카락을 귀 뒤로 넘긴다) 뭐?",
       "(머리카락을 귀 뒤로 넘긴다) 뭐?", [])
 check("쑥스러움은 몸과 얼굴이 같이", "(멋쩍은 듯 눈동자가 흔들리며) 왜?",
