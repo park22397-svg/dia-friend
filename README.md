@@ -8,6 +8,7 @@ Flask + Ollama + VRM 으로 만든 아바타 챗봇. 이름은 **다이아**.
 ---
 실행하기 https://dia.kdt2025.com/login   
 
+<img width="1916" height="919" alt="image" src="https://github.com/user-attachments/assets/28bd4201-a0c3-4dc8-b7f7-fa322521f59c" />
 
 ## 돌리는 법
 
