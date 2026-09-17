@@ -637,6 +637,63 @@ def push_out_of_body(pos, keep, body_pos, body_idx, from_y, margin=0.003,
     return moved
 
 
+def waist_cover(go, bo, off, body_pos, tris, hide,
+                reach=0.05, slab=0.01, sector=np.radians(10), margin=0.001):
+    """셔츠 밑단과 치마 허리띠가 겹치는 띠에서, 옷이 덮고 있는 살을 찾는다.
+
+    VRoid 는 옷에 가린 몸을 지워서 내보내는데 **허리 띠는 안 지운다.**
+    교복: 셔츠는 1.006m 까지 내려오고 치마 허리띠는 1.050m 까지 올라오는데
+    지워진 몸은 1.051m 부터다. 그 사이 살이 셔츠를 뚫고 나와 밑단 위에
+    살색 점이 비쳤다(2026-09-17).
+
+    띠 밖은 안 건드린다. 허벅지는 치마가 덮고 있어도 흔들리면 드러난다.
+    띠 안에서도 '그 높이 · 그 방향에서 옷이 살보다 바깥에 있을 때' 만 감춘다
+    — 옷이 없는 쪽을 감추면 구멍이 난다.
+    """
+    wear = []
+    for m in go.get('meshes', []):
+        for p in m['primitives']:
+            if zone_of(mat_name(go, p)) not in ('top', 'skirt', 'onepiece'):
+                continue
+            ii = np.unique(acc_read(go, bo, p['indices']).astype(np.int64))
+            wear.append(acc_read(go, bo, p['attributes']['POSITION'])
+                        .astype(np.float64)[ii] - off)
+    if not wear or not hide.any():
+        return None
+    wear = np.concatenate(wear)
+
+    cent = body_pos[tris].mean(axis=1)
+    lo = cent[hide, 1].min()
+    band = (cent[:, 1] > lo - reach) & (cent[:, 1] < lo + reach) \
+        & ~hide & (np.abs(cent[:, 0]) < 0.2)
+    if not band.any():
+        return None
+
+    extra = np.zeros(len(tris), dtype=bool)
+    for t in np.nonzero(band)[0]:
+        c = cent[t]
+        # 그 높이 몸통의 가운데를 축으로 잡는다
+        near = body_pos[(np.abs(body_pos[:, 1] - c[1]) < slab)
+                        & (np.abs(body_pos[:, 0]) < 0.2)]
+        if len(near) < 8:
+            continue
+        ax = near[:, [0, 2]].mean(axis=0)
+        d = c[[0, 2]] - ax
+        r_body = np.hypot(*d)
+        a_body = np.arctan2(d[1], d[0])
+
+        w = wear[np.abs(wear[:, 1] - c[1]) < slab]
+        if not len(w):
+            continue
+        dw = w[:, [0, 2]] - ax
+        da = np.abs((np.arctan2(dw[:, 1], dw[:, 0]) - a_body + np.pi)
+                    % (2 * np.pi) - np.pi)
+        rw = np.hypot(dw[:, 0], dw[:, 1])[da < sector]
+        if len(rw) and rw.max() >= r_body - margin:
+            extra[t] = True
+    return extra
+
+
 def body_mask(base_path, outfit_path, say=print):
     """맨몸에서 감출 삼각형을 찾는다.
 
@@ -733,6 +790,11 @@ def body_mask(base_path, outfit_path, say=print):
     hide = gone[tris].any(axis=1)
     say('몸 가리기: 삼각형 %d개 중 %d개를 감춘다 (%.1f%%) · 오프셋 %+.3fmm'
         % (len(tris), int(hide.sum()), hide.mean() * 100, off[1] * 1000))
+
+    extra = waist_cover(go, bo, off, pb, tris, hide)
+    if extra is not None and extra.any():
+        hide |= extra
+        say('  허리 띠에서 옷이 덮는 살 %d개를 더 감춘다' % int(extra.sum()))
 
     packed = np.packbits(hide)
     return {
