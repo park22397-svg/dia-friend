@@ -4005,17 +4005,24 @@ DIA = VirtualAvatar(
         # 이걸 비워 두면 손이 판자처럼 쫙 펴진 채로 있는다.
         # 오므리는 축은 왼손 z(+), 오른손 z(-). 엄지만 y 축이다. 실측값이다.
         # 새끼로 갈수록 더 굽힌다. 다시 만들려면 _fit_hand.py 를 돌린다.
+        #
+        # 단, 약지·새끼의 가운데 마디는 34·37 → 20·22 로 폈다(2026-09-17).
+        # 손바닥이 정면을 볼 때(기지개·손인사) 그 마디에 진한 선이 보였다.
+        # 뭐가 붙은 게 아니라 손등 쪽 외곽선(MToon outline)이 굽은 마디 틈으로
+        # 비친 것이다 — 외곽선을 끄거나 손가락을 펴면 사라졌다. 가운데 마디만
+        # 0.6 배로 펴면 선이 없어지고, 뿌리·끝마디는 그대로라 손 모양은 산다.
+        # _fit_hand.py 를 다시 돌리면 이 두 값을 도로 맞춰 둘 것.
         "leftThumbProximal": [10.0, 15.0, 0.0], "leftThumbIntermediate": [12.0, 0.0, 0.0], "leftThumbDistal": [8.0, 0.0, 0.0],
         "leftIndexProximal": [0.0, -5.0, 11.0], "leftIndexIntermediate": [0.0, 0.0, 26.0], "leftIndexDistal": [0.0, 0.0, 15.0],
         "leftMiddleProximal": [0.0, -1.0, 13.0], "leftMiddleIntermediate": [0.0, 0.0, 30.0], "leftMiddleDistal": [0.0, 0.0, 17.0],
-        "leftRingProximal": [0.0, 3.0, 15.0], "leftRingIntermediate": [0.0, 0.0, 34.0], "leftRingDistal": [0.0, 0.0, 19.0],
-        "leftLittleProximal": [0.0, 7.0, 17.0], "leftLittleIntermediate": [0.0, 0.0, 37.0], "leftLittleDistal": [0.0, 0.0, 21.0],
+        "leftRingProximal": [0.0, 3.0, 15.0], "leftRingIntermediate": [0.0, 0.0, 20.0], "leftRingDistal": [0.0, 0.0, 19.0],
+        "leftLittleProximal": [0.0, 7.0, 17.0], "leftLittleIntermediate": [0.0, 0.0, 22.0], "leftLittleDistal": [0.0, 0.0, 21.0],
 
         "rightThumbProximal": [10.0, -15.0, 0.0], "rightThumbIntermediate": [12.0, 0.0, 0.0], "rightThumbDistal": [8.0, 0.0, 0.0],
         "rightIndexProximal": [0.0, 5.0, -11.0], "rightIndexIntermediate": [0.0, 0.0, -26.0], "rightIndexDistal": [0.0, 0.0, -15.0],
         "rightMiddleProximal": [0.0, 1.0, -13.0], "rightMiddleIntermediate": [0.0, 0.0, -30.0], "rightMiddleDistal": [0.0, 0.0, -17.0],
-        "rightRingProximal": [0.0, -3.0, -15.0], "rightRingIntermediate": [0.0, 0.0, -34.0], "rightRingDistal": [0.0, 0.0, -19.0],
-        "rightLittleProximal": [0.0, -7.0, -17.0], "rightLittleIntermediate": [0.0, 0.0, -37.0], "rightLittleDistal": [0.0, 0.0, -21.0],
+        "rightRingProximal": [0.0, -3.0, -15.0], "rightRingIntermediate": [0.0, 0.0, -20.0], "rightRingDistal": [0.0, 0.0, -19.0],
+        "rightLittleProximal": [0.0, -7.0, -17.0], "rightLittleIntermediate": [0.0, 0.0, -22.0], "rightLittleDistal": [0.0, 0.0, -21.0],
     },
 
     # --------------------------------------------------------
@@ -4201,9 +4208,9 @@ DIA = VirtualAvatar(
                     "rightIndexProximal": [0.0, 5.0, -11.0], "rightIndexIntermediate": [0.0, 0.0, -26.0],
                     "rightIndexDistal": [0.0, 0.0, -15.0], "rightMiddleProximal": [0.0, 1.0, -13.0],
                     "rightMiddleIntermediate": [0.0, 0.0, -30.0], "rightMiddleDistal": [0.0, 0.0, -17.0],
-                    "rightRingProximal": [0.0, -3.0, -15.0], "rightRingIntermediate": [0.0, 0.0, -34.0],
+                    "rightRingProximal": [0.0, -3.0, -15.0], "rightRingIntermediate": [0.0, 0.0, -20.0],
                     "rightRingDistal": [0.0, 0.0, -19.0], "rightLittleProximal": [0.0, -7.0, -17.0],
-                    "rightLittleIntermediate": [0.0, 0.0, -37.0], "rightLittleDistal": [0.0, 0.0, -21.0],
+                    "rightLittleIntermediate": [0.0, 0.0, -22.0], "rightLittleDistal": [0.0, 0.0, -21.0],
                     "rightThumbProximal": [10.0, -15.0, 0.0], "rightThumbIntermediate": [12.0, 0.0, 0.0],
                     "rightThumbDistal": [8.0, 0.0, 0.0]
                 }},
@@ -4321,9 +4328,9 @@ DIA = VirtualAvatar(
                     "rightIndexProximal": [0.0, 5.0, -11.0], "rightIndexIntermediate": [0.0, 0.0, -26.0],
                     "rightIndexDistal": [0.0, 0.0, -15.0], "rightMiddleProximal": [0.0, 1.0, -13.0],
                     "rightMiddleIntermediate": [0.0, 0.0, -30.0], "rightMiddleDistal": [0.0, 0.0, -17.0],
-                    "rightRingProximal": [0.0, -3.0, -15.0], "rightRingIntermediate": [0.0, 0.0, -34.0],
+                    "rightRingProximal": [0.0, -3.0, -15.0], "rightRingIntermediate": [0.0, 0.0, -20.0],
                     "rightRingDistal": [0.0, 0.0, -19.0], "rightLittleProximal": [0.0, -7.0, -17.0],
-                    "rightLittleIntermediate": [0.0, 0.0, -37.0], "rightLittleDistal": [0.0, 0.0, -21.0],
+                    "rightLittleIntermediate": [0.0, 0.0, -22.0], "rightLittleDistal": [0.0, 0.0, -21.0],
                     "rightThumbProximal": [10.0, -15.0, 0.0], "rightThumbIntermediate": [12.0, 0.0, 0.0],
                     "rightThumbDistal": [8.0, 0.0, 0.0]
                 }},
@@ -4343,9 +4350,9 @@ DIA = VirtualAvatar(
                     "rightIndexProximal": [0.0, 5.0, -11.0], "rightIndexIntermediate": [0.0, 0.0, -26.0],
                     "rightIndexDistal": [0.0, 0.0, -15.0], "rightMiddleProximal": [0.0, 1.0, -13.0],
                     "rightMiddleIntermediate": [0.0, 0.0, -30.0], "rightMiddleDistal": [0.0, 0.0, -17.0],
-                    "rightRingProximal": [0.0, -3.0, -15.0], "rightRingIntermediate": [0.0, 0.0, -34.0],
+                    "rightRingProximal": [0.0, -3.0, -15.0], "rightRingIntermediate": [0.0, 0.0, -20.0],
                     "rightRingDistal": [0.0, 0.0, -19.0], "rightLittleProximal": [0.0, -7.0, -17.0],
-                    "rightLittleIntermediate": [0.0, 0.0, -37.0], "rightLittleDistal": [0.0, 0.0, -21.0],
+                    "rightLittleIntermediate": [0.0, 0.0, -22.0], "rightLittleDistal": [0.0, 0.0, -21.0],
                     "rightThumbProximal": [10.0, -15.0, 0.0], "rightThumbIntermediate": [12.0, 0.0, 0.0],
                     "rightThumbDistal": [8.0, 0.0, 0.0]
                 }},
@@ -4463,9 +4470,9 @@ DIA = VirtualAvatar(
                     "rightIndexProximal": [0.0, 5.0, -11.0], "rightIndexIntermediate": [0.0, 0.0, -26.0],
                     "rightIndexDistal": [0.0, 0.0, -15.0], "rightMiddleProximal": [0.0, 1.0, -13.0],
                     "rightMiddleIntermediate": [0.0, 0.0, -30.0], "rightMiddleDistal": [0.0, 0.0, -17.0],
-                    "rightRingProximal": [0.0, -3.0, -15.0], "rightRingIntermediate": [0.0, 0.0, -34.0],
+                    "rightRingProximal": [0.0, -3.0, -15.0], "rightRingIntermediate": [0.0, 0.0, -20.0],
                     "rightRingDistal": [0.0, 0.0, -19.0], "rightLittleProximal": [0.0, -7.0, -17.0],
-                    "rightLittleIntermediate": [0.0, 0.0, -37.0], "rightLittleDistal": [0.0, 0.0, -21.0],
+                    "rightLittleIntermediate": [0.0, 0.0, -22.0], "rightLittleDistal": [0.0, 0.0, -21.0],
                     "rightThumbProximal": [10.0, -15.0, 0.0], "rightThumbIntermediate": [12.0, 0.0, 0.0],
                     "rightThumbDistal": [8.0, 0.0, 0.0]
                 }},
@@ -4485,9 +4492,9 @@ DIA = VirtualAvatar(
                     "rightIndexProximal": [0.0, 5.0, -11.0], "rightIndexIntermediate": [0.0, 0.0, -26.0],
                     "rightIndexDistal": [0.0, 0.0, -15.0], "rightMiddleProximal": [0.0, 1.0, -13.0],
                     "rightMiddleIntermediate": [0.0, 0.0, -30.0], "rightMiddleDistal": [0.0, 0.0, -17.0],
-                    "rightRingProximal": [0.0, -3.0, -15.0], "rightRingIntermediate": [0.0, 0.0, -34.0],
+                    "rightRingProximal": [0.0, -3.0, -15.0], "rightRingIntermediate": [0.0, 0.0, -20.0],
                     "rightRingDistal": [0.0, 0.0, -19.0], "rightLittleProximal": [0.0, -7.0, -17.0],
-                    "rightLittleIntermediate": [0.0, 0.0, -37.0], "rightLittleDistal": [0.0, 0.0, -21.0],
+                    "rightLittleIntermediate": [0.0, 0.0, -22.0], "rightLittleDistal": [0.0, 0.0, -21.0],
                     "rightThumbProximal": [10.0, -15.0, 0.0], "rightThumbIntermediate": [12.0, 0.0, 0.0],
                     "rightThumbDistal": [8.0, 0.0, 0.0]
                 }},
@@ -4605,9 +4612,9 @@ DIA = VirtualAvatar(
                     "rightIndexProximal": [0.0, 5.0, -11.0], "rightIndexIntermediate": [0.0, 0.0, -26.0],
                     "rightIndexDistal": [0.0, 0.0, -15.0], "rightMiddleProximal": [0.0, 1.0, -13.0],
                     "rightMiddleIntermediate": [0.0, 0.0, -30.0], "rightMiddleDistal": [0.0, 0.0, -17.0],
-                    "rightRingProximal": [0.0, -3.0, -15.0], "rightRingIntermediate": [0.0, 0.0, -34.0],
+                    "rightRingProximal": [0.0, -3.0, -15.0], "rightRingIntermediate": [0.0, 0.0, -20.0],
                     "rightRingDistal": [0.0, 0.0, -19.0], "rightLittleProximal": [0.0, -7.0, -17.0],
-                    "rightLittleIntermediate": [0.0, 0.0, -37.0], "rightLittleDistal": [0.0, 0.0, -21.0],
+                    "rightLittleIntermediate": [0.0, 0.0, -22.0], "rightLittleDistal": [0.0, 0.0, -21.0],
                     "rightThumbProximal": [10.0, -15.0, 0.0], "rightThumbIntermediate": [12.0, 0.0, 0.0],
                     "rightThumbDistal": [8.0, 0.0, 0.0]
                 }},
