@@ -4727,6 +4727,13 @@ DIA = VirtualAvatar(
             # 가슴의 x 는 양수가 뒤로 젖히는 쪽이다(머리와 같은 방향).
             # 예전에는 -4, -5 여서 앞으로 숙인 채 고개만 들고 있었다.
             # 기지개는 몸을 펴는 동작이니 뒤로 젖혀야 한다.
+            #
+            # 팔은 곧게 위로 뻗는다(2026-09-17). 예전에는 위팔을 반쯤만 들고
+            # 팔꿈치를 43도 접은 뒤 아래팔을 86도 비틀어 손을 세웠다. 맨몸에선
+            # 티가 안 났지만 셔츠를 입히면 소매가 팔꿈치에서 꺾이고 겨드랑이가
+            # 팔꿈치까지 늘어났다. VRoid 가 내보낸 원본 교복도 똑같이 찌그러져서
+            # 옷을 떼어 붙인 탓이 아니라 자세 탓으로 판정했다.
+            # 비틀기(x)는 0, 팔꿈치는 12도만 — 소매가 가장 덜 찌그러지는 자리다.
             duration=2.8,
             loop=False,
             keys=[
@@ -4737,20 +4744,20 @@ DIA = VirtualAvatar(
                     "rightLowerArm": [0, 0, -10], "rightHand": [0, 0, 0],
                     "spine": [0, 0, 0], "chest": [0, 0, 0], "head": [0, 0, 0]}},
                 {"t": 0.7, "bones": {
-                    "leftShoulder": [0.14, -1.02, -20.05],
-                    "leftUpperArm": [7.94, -8.07, -34.63],
-                    "leftLowerArm": [86.29, -42.88, 0], "leftHand": [0, 0, 0],
-                    "rightShoulder": [0.14, 1.02, 20.05],
-                    "rightUpperArm": [7.94, 8.07, 34.63],
-                    "rightLowerArm": [86.29, 42.88, 0], "rightHand": [0, 0, 0],
+                    "leftShoulder": [0, 0, -12],
+                    "leftUpperArm": [0, -15, -65],
+                    "leftLowerArm": [0, -12, 0], "leftHand": [0, 0, 0],
+                    "rightShoulder": [0, 0, 12],
+                    "rightUpperArm": [0, 15, 65],
+                    "rightLowerArm": [0, 12, 0], "rightHand": [0, 0, 0],
                     "spine": [5, 0, 0], "chest": [10, 0, 0], "head": [12, 0, 0]}},
                 {"t": 1.6, "bones": {
-                    "leftShoulder": [0.14, -1.02, -20.05],
-                    "leftUpperArm": [7.94, -8.07, -34.63],
-                    "leftLowerArm": [86.29, -42.88, 0], "leftHand": [0, 0, 0],
-                    "rightShoulder": [0.14, 1.02, 20.05],
-                    "rightUpperArm": [7.94, 8.07, 34.63],
-                    "rightLowerArm": [86.29, 42.88, 0], "rightHand": [0, 0, 0],
+                    "leftShoulder": [0, 0, -12],
+                    "leftUpperArm": [0, -15, -65],
+                    "leftLowerArm": [0, -12, 0], "leftHand": [0, 0, 0],
+                    "rightShoulder": [0, 0, 12],
+                    "rightUpperArm": [0, 15, 65],
+                    "rightLowerArm": [0, 12, 0], "rightHand": [0, 0, 0],
                     "spine": [7, 0, 0], "chest": [14, 0, 0], "head": [14, 0, 0]}},
                 {"t": 2.8, "bones": {
                     "leftShoulder": [0, 0, 0], "leftUpperArm": [0, 0, 68.75],
