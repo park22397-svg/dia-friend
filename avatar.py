@@ -7366,5 +7366,71 @@ def load_custom_expressions(avatar, path=CUSTOM_EXPRESSIONS):
 
 load_custom_expressions(DIA)
 
+
+# ============================================================
+# 제스처 조정대에서 고친 동작
+#
+# /gesture 에서 사람이 키프레임을 눈으로 보고 고친 것을 motions_custom.json
+# 에 적는다. 키와 길이만 덮는다 — 이름·표정·반복 같은 성격은 코드가 쥔다.
+# 지우면 코드의 원래 키로 돌아간다.
+# ============================================================
+
+CUSTOM_MOTIONS = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "motions_custom.json")
+
+_MOTION_ORIGINAL = {}
+
+
+def _read_json(path):
+    import json
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def _write_json(path, data):
+    import json
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=1)
+
+
+def apply_custom_motion(avatar, key, v):
+    m = next((x for x in avatar.motions if x.key == key), None)
+    if not m or not v.get("keys"):
+        return None
+    _MOTION_ORIGINAL.setdefault(
+        key, {"keys": m.keys, "duration": m.duration})
+    m.keys = v["keys"]
+    if v.get("duration"):
+        m.duration = float(v["duration"])
+    return m
+
+
+def save_custom_motion(avatar, key, v, path=CUSTOM_MOTIONS):
+    items = _read_json(path)
+    items[key] = {"keys": v["keys"], "duration": v["duration"]}
+    _write_json(path, items)
+    return apply_custom_motion(avatar, key, items[key])
+
+
+def remove_custom_motion(avatar, key, path=CUSTOM_MOTIONS):
+    items = _read_json(path)
+    if key not in items:
+        return False
+    del items[key]
+    _write_json(path, items)
+    orig = _MOTION_ORIGINAL.pop(key, None)
+    m = next((x for x in avatar.motions if x.key == key), None)
+    if m and orig:
+        m.keys = orig["keys"]
+        m.duration = orig["duration"]
+    return True
+
+
+for _k, _v in _read_json(CUSTOM_MOTIONS).items():
+    apply_custom_motion(DIA, _k, _v)
+
 # 프로젝트 어디서든 같은 개체를 가리키도록
 AVATAR = DIA

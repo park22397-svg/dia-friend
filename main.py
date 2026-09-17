@@ -3918,6 +3918,127 @@ def custom_expression_remove_api(key):
 
 
 # ============================================================
+# 제스처 조정대
+#
+# 동작을 옷 입힌 채로 재생·멈춤·되감으며 보고, 키프레임의 뼈 각도를
+# 슬라이더로 고친다. 적는 곳은 motions_custom.json — 코드는 안 건드린다.
+# ============================================================
+
+@app.route("/gesture")
+def gesture_page():
+    return render_template("gesture.html", editable=_from_this_pc())
+
+
+@app.route("/api/motions/custom")
+def custom_motion_list_api():
+    from avatar import _MOTION_ORIGINAL
+    return jsonify({"ok": True, "editable": _from_this_pc(),
+                    "items": sorted(_MOTION_ORIGINAL)})
+
+
+@app.route("/api/motions/custom", methods=["POST"])
+def custom_motion_save_api():
+    import re
+    from avatar import save_custom_motion
+
+    if not _from_this_pc():
+        return jsonify({"ok": False, "error": "이 컴퓨터에서만 고칠 수 있다."}), 403
+
+    data = request.get_json(silent=True) or {}
+    key = str(data.get("key") or "")
+    m = next((x for x in AVATAR.motions if x.key == key), None)
+    if not m:
+        return jsonify({"ok": False, "error": "없는 동작이다."}), 404
+
+    try:
+        duration = round(float(data.get("duration") or m.duration), 3)
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "길이가 숫자가 아니다."}), 400
+    if not 0.1 <= duration <= 30:
+        return jsonify({"ok": False, "error": "길이는 0.1~30초."}), 400
+
+    bone_re = re.compile(r"^(hips|spine|chest|upperChest|neck|head|"
+                         r"(left|right)(Shoulder|UpperArm|LowerArm|Hand|"
+                         r"UpperLeg|LowerLeg|Foot|"
+                         r"(Thumb|Index|Middle|Ring|Little)"
+                         r"(Proximal|Intermediate|Distal)))$")
+    keys = []
+    for k in data.get("keys") or []:
+        try:
+            t = round(float(k.get("t")), 3)
+        except (TypeError, ValueError, AttributeError):
+            return jsonify({"ok": False, "error": "키 시간이 숫자가 아니다."}), 400
+        if not 0 <= t <= duration:
+            return jsonify({"ok": False,
+                            "error": f"키 {t}s 가 길이({duration}s) 밖이다."}), 400
+        bones = {}
+        for n, v in (k.get("bones") or {}).items():
+            if not bone_re.match(str(n)):
+                return jsonify({"ok": False, "error": f"모르는 뼈: {n}"}), 400
+            try:
+                bones[n] = [round(max(-360.0, min(360.0, float(x))), 2)
+                            for x in list(v)[:3]]
+            except (TypeError, ValueError):
+                return jsonify({"ok": False, "error": f"{n} 값이 숫자가 아니다."}), 400
+            if len(bones[n]) != 3:
+                return jsonify({"ok": False, "error": f"{n} 값은 셋이다."}), 400
+        keys.append({"t": t, "bones": bones})
+
+    if len(keys) < 2:
+        return jsonify({"ok": False, "error": "키는 둘 이상이어야 한다."}), 400
+    keys.sort(key=lambda k: k["t"])
+    if len({k["t"] for k in keys}) != len(keys):
+        return jsonify({"ok": False, "error": "같은 시간에 키가 둘이다."}), 400
+
+    m = save_custom_motion(AVATAR, key, {"keys": keys, "duration": duration})
+    print(f"[제스처] {m.label} ({key}) 적음 — 키 {len(keys)}개, {duration}s")
+    return jsonify({"ok": True, "motion": m.to_dict()})
+
+
+@app.route("/api/motions/custom/<key>", methods=["DELETE"])
+def custom_motion_remove_api(key):
+    from avatar import remove_custom_motion
+
+    if not _from_this_pc():
+        return jsonify({"ok": False, "error": "이 컴퓨터에서만 고칠 수 있다."}), 403
+    if not remove_custom_motion(AVATAR, key):
+        return jsonify({"ok": False, "error": "고친 적 없는 동작이다."}), 404
+    m = next((x for x in AVATAR.motions if x.key == key), None)
+    print(f"[제스처] {key} 원래대로")
+    return jsonify({"ok": True, "motion": m.to_dict() if m else None})
+
+
+@app.route("/api/motions/check", methods=["POST"])
+def custom_motion_check_api():
+    """저장된 값으로 몸 뚫림·팔꿈치 꺾임을 잰다(_verify_collision.py)."""
+    import re
+    import subprocess
+    import sys
+
+    if not _from_this_pc():
+        return jsonify({"ok": False, "error": "이 컴퓨터에서만 검사할 수 있다."}), 403
+
+    key = str((request.get_json(silent=True) or {}).get("key") or "")
+    here = os.path.dirname(os.path.abspath(__file__))
+    try:
+        r = subprocess.run(
+            [sys.executable, "_verify_collision.py"], cwd=here,
+            capture_output=True, timeout=240,
+            env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+    except subprocess.TimeoutExpired:
+        return jsonify({"ok": False, "error": "검사가 4분을 넘겼다."}), 504
+
+    out = r.stdout.decode("utf-8", "replace")
+    line = next((ln.strip() for ln in out.splitlines()
+                 if re.match(r"\s*(PASS|FAIL)\s+" + re.escape(key) + r"\s", ln)),
+                None)
+    if not line:
+        return jsonify({"ok": False, "error": "검사 결과에서 이 동작을 못 찾았다.",
+                        "raw": out[-800:]}), 500
+    return jsonify({"ok": True, "pass": line.startswith("PASS"), "line": line})
+
+
+# ============================================================
 # 서버 실행
 # ============================================================
 

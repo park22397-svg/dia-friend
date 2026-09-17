@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>다이아 제스처 조정대</title>
+
+    <script src="https://unpkg.com/three@0.137.0/build/three.min.js"></script>
+    <script src="https://unpkg.com/three@0.137.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://unpkg.com/three@0.137.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://unpkg.com/@pixiv/three-vrm@0.6.11/lib/three-vrm.js"></script>
+
+    <style>
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            background: #14162a;
+            color: #e6e7f2;
+            font-family: 'Malgun Gothic', system-ui, sans-serif;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #stage { flex: 1; position: relative; min-width: 0; }
+        #canvas { width: 100%; height: 100%; display: block; }
+
+        #loading {
+            position: absolute; inset: 0; z-index: 5;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 15px; color: #9ea2c8; background: #14162a;
+        }
+
+        #view {
+            position: absolute; left: 14px; top: 14px;
+            display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
+        }
+        #view select { background: #2a2e52; color: #e6e7f2; border: 1px solid #3d4270; border-radius: 6px; padding: 4px 6px; font-family: inherit; font-size: 12px; }
+
+        #palm {
+            position: absolute; right: 14px; top: 14px;
+            background: rgba(20, 22, 42, 0.86); border: 1px solid #3a3f68;
+            border-radius: 8px; padding: 7px 11px; font-size: 12px; line-height: 1.7;
+            font-variant-numeric: tabular-nums;
+        }
+
+        #timeline {
+            position: absolute; left: 14px; right: 14px; bottom: 12px;
+            background: rgba(20, 22, 42, 0.9); border: 1px solid #3a3f68;
+            border-radius: 10px; padding: 9px 12px;
+        }
+        #tlRow { display: flex; align-items: center; gap: 10px; }
+        #tlRow .time { font-size: 13px; min-width: 104px; font-variant-numeric: tabular-nums; }
+        #track { position: relative; flex: 1; height: 30px; }
+        #track input[type=range] { position: absolute; left: 0; right: 0; top: 13px; width: 100%; margin: 0; }
+        #marks { position: absolute; left: 0; right: 0; top: 0; height: 12px; pointer-events: none; }
+        .mark {
+            position: absolute; top: 0; width: 10px; height: 10px; margin-left: -5px;
+            transform: rotate(45deg); background: #7a6cf0; pointer-events: auto; cursor: pointer;
+        }
+        .mark.sel { background: #f0b86a; }
+        #tlOpts { display: flex; gap: 12px; align-items: center; margin-top: 6px; font-size: 12px; color: #aeb2d6; }
+
+        #panel {
+            width: 460px;
+            background: #1b1e36;
+            border-left: 1px solid #2c3050;
+            overflow-y: auto;
+            padding: 14px 16px 40px;
+        }
+
+        h2 { font-size: 13px; color: #aeb2d6; font-weight: normal; margin: 18px 0 8px; }
+        h2:first-child { margin-top: 0; }
+
+        button {
+            background: #2a2e52; border: 1px solid #3d4270; color: #e6e7f2;
+            padding: 5px 11px; border-radius: 6px; cursor: pointer;
+            font-family: inherit; font-size: 12px;
+        }
+        button:hover { background: #343a66; }
+        button.on { background: #5b4bd6; border-color: #7a6cf0; }
+        button.primary { background: #4b3fc0; border-color: #6d60ea; }
+        button.danger { background: #4a2433; border-color: #7a3a52; }
+        button:disabled { opacity: 0.4; cursor: default; }
+
+        .chips { display: flex; flex-wrap: wrap; gap: 5px; }
+        .chips button { padding: 4px 9px; }
+        .chips button.mine { border-style: dashed; }
+
+        .note { font-size: 11.5px; color: #8f93b8; line-height: 1.6; margin: 4px 0; }
+        .warn { color: #f0b86a; }
+        .bad { color: #f07a8a; }
+        .good { color: #7ad6a0; }
+
+        .bar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+        input[type=number] {
+            width: 74px; background: #101228; border: 1px solid #343a5e; color: #e6e7f2;
+            border-radius: 5px; padding: 4px 6px; font-family: inherit; font-size: 12px;
+        }
+        select.pick { background: #101228; color: #e6e7f2; border: 1px solid #343a5e; border-radius: 5px; padding: 4px; font-family: inherit; font-size: 12px; }
+
+        .bone { border-top: 1px solid #2c3050; padding: 7px 0 5px; }
+        .bone-head { display: flex; align-items: center; gap: 8px; font-size: 12.5px; margin-bottom: 3px; }
+        .bone-head .nm { flex: 1; color: #fff; }
+        .bone-head .ko { color: #8f93b8; font-size: 11.5px; }
+        .axis { display: grid; grid-template-columns: 16px 1fr 62px; gap: 8px; align-items: center; font-size: 12px; padding: 1px 0; }
+        .axis span { color: #9ea2c8; }
+        .axis input[type=range] { width: 100%; }
+        .axis input[type=number] { width: 62px; }
+
+        details.group { border-top: 1px solid #2c3050; padding: 4px 0; }
+        details.group > summary { cursor: pointer; font-size: 12.5px; color: #aeb2d6; padding: 4px 0; }
+
+        #msg { min-height: 18px; font-size: 12px; margin-top: 8px; line-height: 1.6; }
+    </style>
+</head>
+<body>
+
+<div id="stage">
+    <canvas id="canvas"></canvas>
+
+    <div id="view">
+        <button onclick="aim('front')">정면</button>
+        <button onclick="aim('side')">옆</button>
+        <button onclick="aim('back')">뒤</button>
+        <button onclick="aim('hands')">손</button>
+        <select id="outfit" title="옷"></select>
+    </div>
+
+    <div id="palm">손바닥 방향<br><span id="palmL">왼손 —</span><br><span id="palmR">오른손 —</span></div>
+
+    <div id="timeline">
+        <div id="tlRow">
+            <button id="btnPlay" onclick="togglePlay()">▶</button>
+            <div class="time" id="timeText">0.00 / 0.00s</div>
+            <div id="track">
+                <div id="marks"></div>
+                <input type="range" id="scrub" min="0" max="1" step="0.01" value="0">
+            </div>
+        </div>
+        <div id="tlOpts">
+            <label>속도
+                <select id="speed" class="pick">
+                    <option value="0.25">0.25×</option>
+                    <option value="0.5">0.5×</option>
+                    <option value="1" selected>1×</option>
+                </select>
+            </label>
+            <label><input type="checkbox" id="loop" checked> 반복</label>
+            <span class="note">◆ 키프레임 — 누르면 그 자리로 간다 · 스페이스 재생/멈춤 · ←→ 한 프레임</span>
+        </div>
+    </div>
+
+    <div id="loading">아바타를 불러오는 중…</div>
+</div>
+
+<div id="panel">
+    <h2>동작 — 누르면 재생한다</h2>
+    <div class="chips" id="motionList"></div>
+    <div class="note">점선 테두리는 조정대에서 고친 것.</div>
+    <div class="note" id="motionInfo"></div>
+
+    <h2>키프레임</h2>
+    <div class="chips" id="keyList"></div>
+    <div class="bar">
+        <button onclick="addKey()">지금 시간에 키 추가</button>
+        <button class="danger" id="btnDelKey" onclick="deleteKey()">이 키 지우기</button>
+    </div>
+    <div class="bar">
+        <label class="note">이 키 시간 <input type="number" id="keyT" step="0.05" min="0"> s</label>
+        <label class="note">동작 길이 <input type="number" id="dur" step="0.1" min="0.1"> s</label>
+    </div>
+
+    <h2>이 키의 뼈 <span class="note">— 슬라이더는 도(°) 단위</span></h2>
+    <div class="bar">
+        <label class="note"><input type="checkbox" id="mirror" checked> 좌우 같이 (반대쪽은 y·z 부호를 뒤집어 넣는다)</label>
+    </div>
+    <div class="bar">
+        <select id="addBone" class="pick"></select>
+        <button onclick="addBone()">뼈 추가</button>
+    </div>
+    <div id="bones"></div>
+
+    <h2>저장</h2>
+    <div class="bar">
+        <button class="primary" id="btnSave" onclick="save()">저장</button>
+        <button id="btnCheck" onclick="check()">몸 뚫림 검사</button>
+        <button id="btnRevert" onclick="revertEdits()">고친 것 취소</button>
+        <button class="danger" id="btnOrig" onclick="restoreOriginal()">코드 원래 값으로</button>
+    </div>
+    <div id="msg"></div>
+    <div class="note">
+        저장하면 motions_custom.json 에 적힌다. 채팅 화면은 새로고침하면 쓴다.<br>
+        검사는 저장된 값으로 20ms 간격 재생하며 팔이 몸을 뚫는지·팔꿈치가 뒤로 꺾이는지 본다(몇십 초 걸린다).
+    </div>
+</div>
+
+<script>
+const EDITABLE = {{ 'true' if editable else 'false' }};
+
+// ============================================================
+// 장면
+// ============================================================
+
+const canvas = document.getElementById('canvas');
+const loading = document.getElementById('loading');
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x14162a);
+
+const camera = new THREE.PerspectiveCamera(30, canvas.clientWidth / canvas.clientHeight, 0.05, 40);
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+const dir = new THREE.DirectionalLight(0xffffff, 1.0);
+dir.position.set(0.5, 1, 1).normalize();
+scene.add(dir);
+scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+scene.add(new THREE.GridHelper(4, 16, 0x3a3d5c, 0x262943));
+
+window.addEventListener('resize', () => {
+    camera.aspect = canvas.clientWidth / canvas.clientHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+});
+
+const DEG = Math.PI / 180;
+
+// 채팅 화면(index.html)의 MOTION_BONES 와 같아야 한다
+const BODY_BONES = [
+    'hips', 'spine', 'chest', 'upperChest', 'neck', 'head',
+    'leftShoulder', 'leftUpperArm', 'leftLowerArm', 'leftHand',
+    'rightShoulder', 'rightUpperArm', 'rightLowerArm', 'rightHand',
+    'leftUpperLeg', 'leftLowerLeg', 'leftFoot',
+    'rightUpperLeg', 'rightLowerLeg', 'rightFoot'
+];
+const FINGER_BONES = [];
+['left', 'right'].forEach(side => {
+    ['Thumb', 'Index', 'Middle', 'Ring', 'Little'].forEach(f => {
+        ['Proximal', 'Intermediate', 'Distal'].forEach(j => FINGER_BONES.push(side + f + j));
+    });
+});
+const ALL_BONES = BODY_BONES.concat(FINGER_BONES);
+
+const KO = {
+    hips: '골반', spine: '허리', chest: '가슴', upperChest: '윗가슴', neck: '목', head: '머리',
+    Shoulder: '어깨', UpperArm: '위팔', LowerArm: '아래팔', Hand: '손목',
+    UpperLeg: '허벅지', LowerLeg: '종아리', Foot: '발',
+    Thumb: '엄지', Index: '검지', Middle: '중지', Ring: '약지', Little: '새끼',
+    Proximal: '1', Intermediate: '2', Distal: '3'
+};
+function koName(n) {
+    if (KO[n]) return KO[n];
+    const m = /^(left|right)(.+)$/.exec(n);
+    if (!m) return n;
+    const side = m[1] === 'left' ? '왼' : '오른';
+    const f = /^(Thumb|Index|Middle|Ring|Little)(Proximal|Intermediate|Distal)$/.exec(m[2]);
+    if (f) return side + ' ' + KO[f[1]] + ' ' + KO[f[2]] + '마디';
+    return side + (KO[m[2]] || m[2]);
+}
+
+// 축마다 무엇이 되는지 — 실측 규약(vrm-rig-conventions)에서
+const AXIS_HINT = {
+    UpperArm: 'x 비틀기 · y 앞뒤 · z 올리고 내리기',
+    LowerArm: 'x 비틀기 · y 팔꿈치 굽힘(왼 −, 오른 +)',
+    Hand: 'x 비틀기(손바닥 방향) · y · z',
+    Shoulder: 'z 어깨 들썩',
+    head: 'x + 젖힘 / − 숙임 · y 좌우 돌리기',
+};
+function axisHint(n) {
+    if (AXIS_HINT[n]) return AXIS_HINT[n];
+    const m = /^(left|right)(Shoulder|UpperArm|LowerArm|Hand)$/.exec(n);
+    if (m) return AXIS_HINT[m[2]];
+    if (/(Index|Middle|Ring|Little)/.test(n)) return 'z 오므리기(왼 +, 오른 −)';
+    if (/Thumb/.test(n)) return 'y 모으기(왼 +, 오른 −)';
+    return '';
+}
+
+let currentVRM = null;
+let ENTITY = null;
+let CUSTOM = [];
+const boneNodes = {};
+
+// 지금 보고 고치는 동작. 서버의 것을 깊이 복사해 들고 있다.
+let motion = null;
+let savedJSON = '';     // 마지막으로 서버와 같았던 상태
+let time = 0;
+let playing = false;
+let selKey = -1;
+
+
+// ============================================================
+// 불러오기
+// ============================================================
+
+(async function start() {
+    const [a, c] = await Promise.all([
+        fetch('/api/avatar').then(r => r.json()),
+        fetch('/api/motions/custom').then(r => r.json()),
+    ]);
+    ENTITY = a;
+    CUSTOM = c.items || [];
+
+    new THREE.GLTFLoader().load((ENTITY.model && ENTITY.model.vrm) || '/static/avatar.vrm', gltf => {
+        if (THREE.VRMUtils) THREE.VRMUtils.removeUnnecessaryJoints(gltf.scene);
+        THREE.VRM.from(gltf).then(vrm => {
+            currentVRM = vrm;
+            vrm.scene.rotation.y = Math.PI;
+            scene.add(vrm.scene);
+            ALL_BONES.forEach(n => {
+                let node = null;
+                try { node = vrm.humanoid.getBoneNode(n); } catch (e) {}
+                if (node) boneNodes[n] = node;
+            });
+            loading.style.display = 'none';
+
+            buildMotionList();
+            buildAddBone();
+            loadWardrobe();
+            const first = (new URLSearchParams(location.search)).get('m') || 'stretch';
+            selectMotion(ENTITY.motions.some(m => m.key === first) ? first : ENTITY.motions[0].key);
+            aim('front');
+        });
+    }, p => {
+        if (p.total) loading.textContent = '아바타를 불러오는 중… ' + Math.round(p.loaded / p.total * 100) + '%';
+    }, e => { loading.textContent = '불러오기 실패 — ' + e; });
+})();
+
+
+// ============================================================
+// 옷 — 채팅 화면과 같은 방식(뼈 베끼기 + 몸 가리기)
+// ============================================================
+
+let wardrobe = [];
+let WEAR = null;             // {vrm, pairs, item}
+let bodyMaskMesh = null, bodyFullIndex = null;
+
+async function loadWardrobe() {
+    const sel = document.getElementById('outfit');
+    try {
+        const w = await fetch('/api/wardrobe').then(r => r.json());
+        wardrobe = (w.items || []).filter(x => (x.slot || 'outfit') === 'outfit');
+        const worn = (w.worn && w.worn.outfit) || (wardrobe[0] && wardrobe[0].key) || '';
+        sel.innerHTML = '<option value="">옷 없음</option>'
+            + wardrobe.map(x => `<option value="${x.key}">${x.label}</option>`).join('');
+        sel.value = worn;
+        sel.onchange = () => wear(sel.value);
+        wear(worn);
+    } catch (e) {
+        sel.innerHTML = '<option value="">옷장 없음</option>';
+    }
+}
+
+function wear(key) {
+    if (WEAR) { scene.remove(WEAR.vrm.scene); WEAR = null; applyBodyMask(null); }
+    const item = wardrobe.find(x => x.key === key);
+    if (!item) return;
+    new THREE.GLTFLoader().load((ENTITY.model.wardrobe || '/static/wardrobe/') + item.file, gltf => {
+        THREE.VRM.from(gltf).then(vrm => {
+            vrm.scene.rotation.y = Math.PI;
+            scene.add(vrm.scene);
+            const src = new Map();
+            currentVRM.scene.traverse(o => { if (o.isBone) src.set(o.name, o); });
+            const pairs = [];
+            vrm.scene.traverse(o => { if (o.isBone && src.get(o.name)) pairs.push([src.get(o.name), o]); });
+            WEAR = { vrm, pairs, item };
+            applyBodyMask(item.hide);
+        });
+    });
+}
+
+function applyBodyMask(hide) {
+    if (!bodyMaskMesh && hide) {
+        currentVRM.scene.traverse(o => {
+            if (!(o.isMesh || o.isSkinnedMesh) || !o.geometry.index) return;
+            if (o.geometry.index.count / 3 === hide.triangles) bodyMaskMesh = o;
+        });
+    }
+    if (!bodyMaskMesh) return;
+    if (!bodyFullIndex) bodyFullIndex = bodyMaskMesh.geometry.index.array;
+    const idx = bodyFullIndex;
+    if (!hide || !hide.mask) {
+        bodyMaskMesh.geometry.setIndex(new THREE.BufferAttribute(idx, 1));
+        return;
+    }
+    const bin = atob(hide.mask);
+    const keep = [];
+    for (let t = 0; t < idx.length / 3; t++) {
+        if ((bin.charCodeAt(t >> 3) >> (7 - (t & 7))) & 1) continue;
+        keep.push(idx[t * 3], idx[t * 3 + 1], idx[t * 3 + 2]);
+    }
+    bodyMaskMesh.geometry.setIndex(new THREE.BufferAttribute(new idx.constructor(keep), 1));
+}
+
+function syncWear() {
+    if (!WEAR) return;
+    WEAR.vrm.scene.position.copy(currentVRM.scene.position);
+    WEAR.vrm.scene.quaternion.copy(currentVRM.scene.quaternion);
+    for (const [a, b] of WEAR.pairs) {
+        b.position.copy(a.position);
+        b.quaternion.copy(a.quaternion);
+        b.scale.copy(a.scale);
+    }
+}
+
+
+// ============================================================
+// 자세 — 채팅 화면의 samplePose 를 그대로 옮겼다
+// ============================================================
+
+const EASE = {
+    linear: u => u,
+    easeIn: u => u * u,
+    easeOut: u => 1 - (1 - u) * (1 - u),
+    easeInOut: u => u * u * (3 - 2 * u)
+};
+
+function basePose() { return (ENTITY && ENTITY.base_pose) || {}; }
+
+function channels(m) {
+    const s = {};
+    m.keys.forEach(k => Object.keys(k.bones || {}).forEach(n => s[n] = 1));
+    return Object.keys(s);
+}
+
+function samplePose(m, t) {
+    const base = basePose();
+    const pose = {};
+    Object.keys(base).forEach(n => pose[n] = base[n].slice());
+    const keys = m.keys;
+    let a = keys[0], b = keys[0], u = 0;
+    if (t <= keys[0].t) { a = b = keys[0]; }
+    else if (t >= keys[keys.length - 1].t) { a = b = keys[keys.length - 1]; }
+    else {
+        for (let i = 0; i < keys.length - 1; i++) {
+            if (t >= keys[i].t && t < keys[i + 1].t) {
+                a = keys[i]; b = keys[i + 1];
+                u = (t - a.t) / (b.t - a.t);
+                break;
+            }
+        }
+    }
+    const e = (EASE[m.ease] || EASE.easeInOut)(u);
+    channels(m).forEach(n => {
+        const bs = base[n] || [0, 0, 0];
+        const ra = (a.bones && a.bones[n]) || bs;
+        const rb = (b.bones && b.bones[n]) || bs;
+        pose[n] = [ra[0] + (rb[0] - ra[0]) * e, ra[1] + (rb[1] - ra[1]) * e, ra[2] + (rb[2] - ra[2]) * e];
+    });
+    return pose;
+}
+
+function applyPose(pose) {
+    ALL_BONES.forEach(n => {
+        const node = boneNodes[n];
+        if (!node) return;
+        const r = pose[n] || [0, 0, 0];
+        node.rotation.set(r[0] * DEG, r[1] * DEG, r[2] * DEG);
+    });
+}
+
+
+// ============================================================
+// 손바닥 방향
+//
+// 손 평면의 법선을 굽은 가운뎃손가락 끝 쪽으로 맞춘다. 모델 기준으로
+// 앞(+z)이면 정면이다. 기지개 손바닥이 옆을 보던 것을 이 값으로 고쳤다.
+// ============================================================
+
+function palmDir(side) {
+    const need = ['Hand', 'MiddleProximal', 'IndexProximal', 'LittleProximal', 'MiddleDistal'];
+    if (!need.every(n => boneNodes[side + n])) return null;
+    const W = n => boneNodes[side + n].getWorldPosition(new THREE.Vector3());
+    const wr = W('Hand'), mp = W('MiddleProximal'), ip = W('IndexProximal'), lp = W('LittleProximal'), md = W('MiddleDistal');
+    const n = new THREE.Vector3().crossVectors(mp.clone().sub(wr), lp.clone().sub(ip)).normalize();
+    if (n.dot(md.clone().sub(mp)) < 0) n.negate();
+    // 모델 기준으로 옮긴다(모델은 제자리에서 180도 돌려 세웠다)
+    const inv = currentVRM.scene.getWorldQuaternion(new THREE.Quaternion()).invert();
+    n.applyQuaternion(inv);
+    return -n.z;    // 모델 로컬 -z 가 얼굴 쪽이다
+}
+
+function palmText(v, who) {
+    if (v === null) return who + ' —';
+    const where = v > 0.7 ? '<span class="good">정면</span>'
+        : v < -0.7 ? '<span class="warn">뒤</span>' : '<span class="warn">옆</span>';
+    return `${who} ${where} ${v.toFixed(2)}`;
+}
+
+
+// ============================================================
+// 돌리기
+// ============================================================
+
+const clock = new THREE.Clock();
+let palmTick = 0;
+
+(function animate() {
+    requestAnimationFrame(animate);
+    const dt = Math.min(clock.getDelta(), 0.1);
+    if (currentVRM && motion) {
+        if (playing) {
+            time += dt * parseFloat(document.getElementById('speed').value);
+            if (time >= motion.duration) {
+                if (document.getElementById('loop').checked) time = time % motion.duration;
+                else { time = motion.duration; setPlaying(false); }
+            }
+            updateTimeUI();
+        }
+        applyPose(samplePose(motion, time));
+        currentVRM.update(dt);
+        syncWear();
+        if (WEAR) WEAR.vrm.update(dt);
+
+        palmTick += dt;
+        if (palmTick > 0.15) {
+            palmTick = 0;
+            currentVRM.scene.updateMatrixWorld(true);
+            document.getElementById('palmL').innerHTML = palmText(palmDir('left'), '왼손');
+            document.getElementById('palmR').innerHTML = palmText(palmDir('right'), '오른손');
+        }
+    }
+    renderer.render(scene, camera);
+})();
+
+function setPlaying(on) {
+    playing = on;
+    document.getElementById('btnPlay').textContent = on ? '⏸' : '▶';
+}
+
+function togglePlay() {
+    if (!motion) return;
+    if (!playing && time >= motion.duration) time = 0;
+    setPlaying(!playing);
+}
+
+document.getElementById('scrub').oninput = e => {
+    setPlaying(false);
+    time = parseFloat(e.target.value);
+    selKey = motion.keys.findIndex(k => Math.abs(k.t - time) < 0.005);
+    updateTimeUI();
+    buildKeys();
+    buildBones();
+};
+
+window.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+    if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+    if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
+        setPlaying(false);
+        time = Math.max(0, Math.min(motion.duration, time + (e.code === 'ArrowLeft' ? -1 : 1) / 30));
+        updateTimeUI();
+    }
+});
+
+function updateTimeUI() {
+    document.getElementById('timeText').textContent = time.toFixed(2) + ' / ' + motion.duration.toFixed(2) + 's';
+    document.getElementById('scrub').value = time;
+}
+
+function aim(what) {
+    if (!currentVRM) return;
+    const P = n => boneNodes[n] ? boneNodes[n].getWorldPosition(new THREE.Vector3()) : new THREE.Vector3(0, 1.2, 0);
+    const c = P('chest');
+    // 아래 타임라인에 발이 가리지 않게 조금 내려다보며 한 발 물러선다
+    if (what === 'front') { controls.target.set(c.x, c.y - 0.12, c.z); camera.position.set(c.x, c.y, c.z + 3.2); }
+    if (what === 'side')  { controls.target.set(c.x, c.y - 0.12, c.z); camera.position.set(c.x + 3.2, c.y, c.z); }
+    if (what === 'back')  { controls.target.set(c.x, c.y - 0.12, c.z); camera.position.set(c.x, c.y, c.z - 3.2); }
+    if (what === 'hands') {
+        const m = P('leftHand').add(P('rightHand')).multiplyScalar(0.5);
+        controls.target.copy(m); camera.position.set(m.x, m.y + 0.05, m.z + 1.1);
+    }
+    controls.update();
+}
+
+
+// ============================================================
+// 동작 고르기
+// ============================================================
+
+function dirty() { return motion && JSON.stringify({ k: motion.keys, d: motion.duration }) !== savedJSON; }
+
+function buildMotionList() {
+    const box = document.getElementById('motionList');
+    box.innerHTML = '';
+    ENTITY.motions.forEach(m => {
+        const b = document.createElement('button');
+        b.textContent = m.label;
+        b.title = m.key + (m.description ? '\n' + m.description : '');
+        if (CUSTOM.includes(m.key)) b.classList.add('mine');
+        if (motion && motion.key === m.key) b.classList.add('on');
+        b.onclick = () => selectMotion(m.key);
+        box.appendChild(b);
+    });
+}
+
+function selectMotion(key) {
+    if (motion && motion.key !== key && dirty()
+        && !confirm('"' + motion.label + '" 에 저장 안 한 것이 있다. 버리고 넘어갈까?')) return;
+    const src = ENTITY.motions.find(m => m.key === key);
+    motion = JSON.parse(JSON.stringify(src));
+    motion.keys.sort((a, b) => a.t - b.t);
+    savedJSON = JSON.stringify({ k: motion.keys, d: motion.duration });
+    time = 0;
+    selKey = -1;
+    document.getElementById('scrub').max = motion.duration;
+    document.getElementById('dur').value = motion.duration;
+    document.getElementById('loop').checked = !!motion.loop;
+    document.getElementById('motionInfo').textContent =
+        (motion.description || '') + (motion.loop ? ' · 반복 동작' : '')
+        + (motion.turn_yaw ? ' · 몸 전체를 ' + motion.turn_yaw + '도 돌리는 것은 채팅 화면이 맡는다(여기선 안 보임)' : '');
+    history.replaceState(null, '', '?m=' + key);
+    buildMotionList();
+    buildKeys();
+    buildBones();
+    updateTimeUI();
+    msg('');
+    setPlaying(true);
+}
+
+
+// ============================================================
+// 키프레임
+// ============================================================
+
+function buildKeys() {
+    const box = document.getElementById('keyList');
+    const marks = document.getElementById('marks');
+    box.innerHTML = '';
+    marks.innerHTML = '';
+    motion.keys.forEach((k, i) => {
+        const b = document.createElement('button');
+        b.textContent = k.t.toFixed(2) + 's';
+        if (i === selKey) b.classList.add('on');
+        b.onclick = () => selectKey(i);
+        box.appendChild(b);
+
+        const d = document.createElement('div');
+        d.className = 'mark' + (i === selKey ? ' sel' : '');
+        d.style.left = (k.t / motion.duration * 100) + '%';
+        d.title = k.t.toFixed(2) + 's';
+        d.onclick = () => selectKey(i);
+        marks.appendChild(d);
+    });
+    const has = selKey >= 0;
+    document.getElementById('keyT').disabled = !has;
+    document.getElementById('keyT').value = has ? motion.keys[selKey].t : '';
+    document.getElementById('btnDelKey').disabled = !has || motion.keys.length <= 2;
+}
+
+function selectKey(i) {
+    setPlaying(false);
+    selKey = i;
+    time = motion.keys[i].t;
+    updateTimeUI();
+    buildKeys();
+    buildBones();
+}
+
+function addKey() {
+    setPlaying(false);
+    const t = Math.round(time * 100) / 100;
+    const at = motion.keys.findIndex(k => Math.abs(k.t - t) < 0.005);
+    if (at >= 0) { selectKey(at); return; }
+    // 지금 보이는 자세를 그대로 키로 굳힌다
+    const pose = samplePose(motion, t);
+    const bones = {};
+    channels(motion).forEach(n => bones[n] = pose[n].map(v => Math.round(v * 100) / 100));
+    motion.keys.push({ t, bones });
+    motion.keys.sort((a, b) => a.t - b.t);
+    selectKey(motion.keys.findIndex(k => k.t === t));
+    msg('지금 자세로 ' + t.toFixed(2) + 's 에 키를 넣었다.', 'good');
+}
+
+function deleteKey() {
+    if (selKey < 0 || motion.keys.length <= 2) return;
+    motion.keys.splice(selKey, 1);
+    selKey = -1;
+    buildKeys();
+    buildBones();
+}
+
+document.getElementById('keyT').onchange = e => {
+    if (selKey < 0) return;
+    let t = Math.round(parseFloat(e.target.value) * 100) / 100;
+    if (!(t >= 0 && t <= motion.duration)) { msg('키 시간은 0 ~ 동작 길이 안이어야 한다.', 'bad'); buildKeys(); return; }
+    if (motion.keys.some((k, i) => i !== selKey && Math.abs(k.t - t) < 0.005)) { msg('그 시간에 이미 키가 있다.', 'bad'); buildKeys(); return; }
+    const k = motion.keys[selKey];
+    k.t = t;
+    motion.keys.sort((a, b) => a.t - b.t);
+    selKey = motion.keys.indexOf(k);
+    time = t;
+    updateTimeUI();
+    buildKeys();
+};
+
+document.getElementById('dur').onchange = e => {
+    const d = Math.round(parseFloat(e.target.value) * 100) / 100;
+    const last = Math.max(...motion.keys.map(k => k.t));
+    if (!(d >= 0.1 && d <= 30) || d < last) {
+        msg('길이는 0.1~30초, 그리고 마지막 키(' + last.toFixed(2) + 's)보다 길어야 한다.', 'bad');
+        e.target.value = motion.duration;
+        return;
+    }
+    motion.duration = d;
+    document.getElementById('scrub').max = d;
+    time = Math.min(time, d);
+    updateTimeUI();
+    buildKeys();
+};
+
+
+// ============================================================
+// 뼈 조정
+// ============================================================
+
+function mirrorName(n) {
+    if (n.startsWith('left')) return 'right' + n.slice(4);
+    if (n.startsWith('right')) return 'left' + n.slice(5);
+    return null;
+}
+
+function buildAddBone() {
+    const sel = document.getElementById('addBone');
+    sel.innerHTML = ALL_BONES.map(n => `<option value="${n}">${koName(n)} (${n})</option>`).join('');
+}
+
+function addBone() {
+    if (selKey < 0) { msg('먼저 키프레임을 고른다.', 'bad'); return; }
+    const n = document.getElementById('addBone').value;
+    const k = motion.keys[selKey];
+    const cur = samplePose(motion, k.t)[n] || [0, 0, 0];
+    if (!k.bones[n]) k.bones[n] = cur.map(v => Math.round(v * 100) / 100);
+    const mn = mirrorName(n);
+    if (document.getElementById('mirror').checked && mn && !k.bones[mn]) {
+        const c2 = samplePose(motion, k.t)[mn] || [0, 0, 0];
+        k.bones[mn] = c2.map(v => Math.round(v * 100) / 100);
+    }
+    buildBones();
+}
+
+function buildBones() {
+    const box = document.getElementById('bones');
+    box.innerHTML = '';
+    if (selKey < 0) {
+        box.innerHTML = '<div class="note">키프레임(◆)을 누르면 그 순간의 뼈 각도가 여기 나온다. '
+            + '키 사이를 고치고 싶으면 그 시간으로 옮겨 "지금 시간에 키 추가".</div>';
+        return;
+    }
+    const k = motion.keys[selKey];
+    const names = Object.keys(k.bones);
+    const groups = [
+        ['팔', n => /(Shoulder|UpperArm|LowerArm|Hand)$/.test(n)],
+        ['몸', n => ['hips', 'spine', 'chest', 'upperChest', 'neck', 'head'].includes(n)],
+        ['다리', n => /(UpperLeg|LowerLeg|Foot)$/.test(n)],
+        ['손가락', n => FINGER_BONES.includes(n)],
+    ];
+    const order = n => ALL_BONES.indexOf(n);
+    groups.forEach(([label, test]) => {
+        const list = names.filter(test).sort((a, b) => order(a) - order(b));
+        if (!list.length) return;
+        const d = document.createElement('details');
+        d.className = 'group';
+        d.open = label !== '손가락';
+        d.innerHTML = `<summary>${label} (${list.length})</summary>`;
+        list.forEach(n => d.appendChild(boneCard(k, n)));
+        box.appendChild(d);
+    });
+    if (!names.length) box.innerHTML = '<div class="note">이 키는 모든 뼈가 기준자세다. 아래에서 뼈를 추가한다.</div>';
+}
+
+function boneCard(k, n) {
+    const card = document.createElement('div');
+    card.className = 'bone';
+    const head = document.createElement('div');
+    head.className = 'bone-head';
+    head.innerHTML = `<span class="nm">${koName(n)}</span><span class="ko">${n}</span>`;
+    const rm = document.createElement('button');
+    rm.textContent = '빼기';
+    rm.title = '이 키에서 빼면 기준자세 값을 쓴다';
+    rm.onclick = () => {
+        delete k.bones[n];
+        const mn = mirrorName(n);
+        if (document.getElementById('mirror').checked && mn) delete k.bones[mn];
+        buildBones();
+    };
+    head.appendChild(rm);
+    card.appendChild(head);
+    const hint = axisHint(n);
+    if (hint) {
+        const h = document.createElement('div');
+        h.className = 'note';
+        h.textContent = hint;
+        card.appendChild(h);
+    }
+    ['x', 'y', 'z'].forEach((ax, i) => {
+        const row = document.createElement('div');
+        row.className = 'axis';
+        const r = document.createElement('input');
+        r.type = 'range'; r.min = -180; r.max = 180; r.step = 1; r.value = k.bones[n][i];
+        const num = document.createElement('input');
+        num.type = 'number'; num.step = 1; num.value = k.bones[n][i];
+        const set = v => {
+            v = Math.round(Math.max(-360, Math.min(360, v)) * 100) / 100;
+            if (isNaN(v)) return;
+            k.bones[n][i] = v;
+            r.value = v; num.value = v;
+            const mn = mirrorName(n);
+            if (document.getElementById('mirror').checked && mn) {
+                if (!k.bones[mn]) k.bones[mn] = k.bones[n].map((x, j) => j === 0 ? x : -x);
+                k.bones[mn][i] = i === 0 ? v : -v;
+                const other = document.querySelector(`.bone[data-bone="${mn}"]`);
+                if (other) other.querySelectorAll('.axis')[i].querySelectorAll('input').forEach(x => x.value = k.bones[mn][i]);
+            }
+        };
+        r.oninput = () => set(parseFloat(r.value));
+        num.onchange = () => set(parseFloat(num.value));
+        const lab = document.createElement('span');
+        lab.textContent = ax;
+        row.append(lab, r, num);
+        card.appendChild(row);
+    });
+    card.dataset.bone = n;
+    return card;
+}
+
+
+// ============================================================
+// 저장 · 검사
+// ============================================================
+
+function msg(html, cls) {
+    const m = document.getElementById('msg');
+    m.className = cls || '';
+    m.innerHTML = html;
+}
+
+async function save() {
+    if (!EDITABLE) { msg('이 컴퓨터(localhost)에서 열어야 저장할 수 있다.', 'bad'); return; }
+    const r = await fetch('/api/motions/custom', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: motion.key, keys: motion.keys, duration: motion.duration }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!j.ok) { msg(j.error || ('실패 — HTTP ' + r.status), 'bad'); return; }
+    replaceMotion(j.motion);
+    if (!CUSTOM.includes(motion.key)) CUSTOM.push(motion.key);
+    buildMotionList();
+    msg('저장했다. 채팅 화면은 새로고침하면 쓴다. 이어서 몸 뚫림 검사를 돌린다…', 'good');
+    check();
+}
+
+function replaceMotion(m) {
+    const i = ENTITY.motions.findIndex(x => x.key === m.key);
+    ENTITY.motions[i] = m;
+    const keepT = selKey >= 0 ? motion.keys[selKey].t : null;
+    motion = JSON.parse(JSON.stringify(m));
+    motion.keys.sort((a, b) => a.t - b.t);
+    savedJSON = JSON.stringify({ k: motion.keys, d: motion.duration });
+    selKey = keepT === null ? -1 : motion.keys.findIndex(k => Math.abs(k.t - keepT) < 0.005);
+    document.getElementById('scrub').max = motion.duration;
+    document.getElementById('dur').value = motion.duration;
+    buildKeys();
+    buildBones();
+}
+
+async function check() {
+    if (!EDITABLE) { msg('검사는 이 컴퓨터에서만 된다.', 'bad'); return; }
+    const btn = document.getElementById('btnCheck');
+    btn.disabled = true;
+    const note = dirty() ? '<br><span class="warn">저장 안 한 것은 검사에 안 들어간다.</span>' : '';
+    const prev = document.getElementById('msg').innerHTML;
+    msg((prev ? prev + '<br>' : '') + '검사 중… (몇십 초)' + note);
+    try {
+        const r = await fetch('/api/motions/check', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: motion.key }),
+        });
+        const j = await r.json().catch(() => ({}));
+        if (!j.ok) msg(j.error || ('검사 실패 — HTTP ' + r.status), 'bad');
+        else msg((j.pass ? '✔ 몸을 뚫지 않고 팔꿈치도 바르게 접힌다.' : '✘ 문제가 있다.') + '<br><code>' + j.line + '</code>' + note, j.pass ? 'good' : 'bad');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+function revertEdits() {
+    if (!dirty()) { msg('고친 것이 없다.'); return; }
+    const saved = JSON.parse(savedJSON);
+    motion.keys = saved.k;
+    motion.duration = saved.d;
+    selKey = -1;
+    document.getElementById('scrub').max = motion.duration;
+    document.getElementById('dur').value = motion.duration;
+    buildKeys();
+    buildBones();
+    msg('마지막 저장 상태로 되돌렸다.');
+}
+
+async function restoreOriginal() {
+    if (!EDITABLE) return;
+    if (!CUSTOM.includes(motion.key)) { msg('조정대에서 저장한 적이 없는 동작이라 이미 코드 값이다.'); return; }
+    if (!confirm('"' + motion.label + '" 을 코드에 적힌 원래 키로 되돌릴까?')) return;
+    const r = await fetch('/api/motions/custom/' + encodeURIComponent(motion.key), { method: 'DELETE' });
+    const j = await r.json().catch(() => ({}));
+    if (!j.ok) { msg(j.error || ('실패 — HTTP ' + r.status), 'bad'); return; }
+    CUSTOM = CUSTOM.filter(k => k !== motion.key);
+    replaceMotion(j.motion);
+    buildMotionList();
+    msg('코드의 원래 값으로 돌아갔다.', 'good');
+}
+
+if (!EDITABLE) {
+    ['btnSave', 'btnCheck', 'btnOrig'].forEach(id => document.getElementById(id).disabled = true);
+    msg('밖에서 열었다 — 보고 고쳐 보기만 된다. 저장은 이 컴퓨터(localhost)에서.', 'warn');
+}
+</script>
+</body>
+</html>
