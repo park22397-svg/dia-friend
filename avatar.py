@@ -4752,6 +4752,13 @@ DIA = VirtualAvatar(
             # 비틀기 75도가 든다. 아래팔 30 + 손목 45 로 나눴다 — 한 관절에
             # 몰면 소매나 손목이 꼬인다. 손바닥 법선(손 평면을 굽은 손가락
             # 끝 쪽으로 맞춘 것)의 z 가 0.29 → 0.95.
+            #
+            # 그다음 사용자: 어깨를 더 내리고 팔꿈치를 더 굽혀라. 어깨 12 → 2.
+            # 팔꿈치(아래팔 y)만 늘리면 앞(카메라 쪽)으로 접혀 정면에선 안 보인다.
+            # **접히는 방향은 아래팔 x 가 정한다** — 뼈 행렬이 Rx·Ry 라 굽힘(y)을
+            # 먼저 하고 그걸 위팔 축으로 돌린다. x 45 에 굽힘 45 면 팔꿈치가 바깥으로
+            # 6.6cm 벌어지고 두 손이 머리 위로 모인다(손 사이 36 → 25cm).
+            # 손바닥은 손목 x 25 로 정면(1.00). 위팔 x 는 팔을 앞뒤로 흔들 뿐이다.
             duration=2.8,
             loop=False,
             keys=[
@@ -4762,20 +4769,20 @@ DIA = VirtualAvatar(
                     "rightLowerArm": [0, 0, -10], "rightHand": [0, 0, 0],
                     "spine": [0, 0, 0], "chest": [0, 0, 0], "head": [0, 0, 0]}},
                 {"t": 0.7, "bones": {
-                    "leftShoulder": [0, 0, -12],
+                    "leftShoulder": [0, 0, -2],
                     "leftUpperArm": [0, -15, -65],
-                    "leftLowerArm": [30, -12, 0], "leftHand": [45, 0, 0],
-                    "rightShoulder": [0, 0, 12],
+                    "leftLowerArm": [45, -45, 0], "leftHand": [25, 0, 0],
+                    "rightShoulder": [0, 0, 2],
                     "rightUpperArm": [0, 15, 65],
-                    "rightLowerArm": [30, 12, 0], "rightHand": [45, 0, 0],
+                    "rightLowerArm": [45, 45, 0], "rightHand": [25, 0, 0],
                     "spine": [5, 0, 0], "chest": [10, 0, 0], "head": [12, 0, 0]}},
                 {"t": 1.6, "bones": {
-                    "leftShoulder": [0, 0, -12],
+                    "leftShoulder": [0, 0, -2],
                     "leftUpperArm": [0, -15, -65],
-                    "leftLowerArm": [30, -12, 0], "leftHand": [45, 0, 0],
-                    "rightShoulder": [0, 0, 12],
+                    "leftLowerArm": [45, -45, 0], "leftHand": [25, 0, 0],
+                    "rightShoulder": [0, 0, 2],
                     "rightUpperArm": [0, 15, 65],
-                    "rightLowerArm": [30, 12, 0], "rightHand": [45, 0, 0],
+                    "rightLowerArm": [45, 45, 0], "rightHand": [25, 0, 0],
                     "spine": [7, 0, 0], "chest": [14, 0, 0], "head": [14, 0, 0]}},
                 {"t": 2.8, "bones": {
                     "leftShoulder": [0, 0, 0], "leftUpperArm": [0, 0, 68.75],
