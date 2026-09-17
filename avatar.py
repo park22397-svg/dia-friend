@@ -2652,8 +2652,10 @@ class VirtualAvatar:
         # 만화의 얼굴은 감정 하나에 대응되지 않는다. 웃는데 눈에 빛이 없거나
         # 입꼬리가 한쪽만 올라가는 얼굴에는 붙일 이모지가 없다.
         # 그래서 이름으로 부른다.
+        # 이모지가 없고 '언제' 가 적힌 얼굴이면 이름으로 부른다.
+        # (배합기에서 만든 얼굴은 표정 그룹을 섞어 쓸 수도 있다)
         named = [e for e in self.expressions
-                 if e.morphs and not e.blendshapes and e.when]
+                 if e.when and not any(is_emoji(t) for t in e.live_triggers)]
 
         if named:
             lines += [
@@ -7651,6 +7653,91 @@ DIA = VirtualAvatar(
     },
 )
 
+
+# ============================================================
+# 배합기에서 만든 표정
+#
+# /face 에서 사람이 눈으로 보고 섞은 얼굴을 expressions_custom.json 에
+# 적는다. 코드를 안 고치고 표정을 늘리고 고치는 자리다.
+#   이미 있는 key  → 수치(와 적었다면 이름·언제)를 덮는다
+#   새 key         → 새 표정. '언제' 를 적었을 때만 모델이 고를 수 있다
+# ============================================================
+
+CUSTOM_EXPRESSIONS = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "expressions_custom.json")
+
+
+# 덮기 전의 값. 배합기에서 지우면 이것으로 되돌린다.
+_EXPR_ORIGINAL = {}
+_EXPR_FIELDS = ("label", "when", "blendshapes", "morphs", "hold_ms")
+
+
+def _read_custom(path=CUSTOM_EXPRESSIONS):
+    import json
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def apply_custom_expression(avatar, key, v):
+    e = avatar.expression(key)
+    if not e:
+        e = Expression(key=key, label=key, hold_ms=3000,
+                       is_reply_emotion=False)
+        avatar.expressions.append(e)
+        _EXPR_ORIGINAL.setdefault(key, None)
+    else:
+        _EXPR_ORIGINAL.setdefault(
+            key, {f: getattr(e, f) for f in _EXPR_FIELDS})
+    e.blendshapes = dict(v.get("blendshapes") or {})
+    e.morphs = dict(v.get("morphs") or {})
+    if v.get("label"):
+        e.label = v["label"]
+    if "when" in v:
+        e.when = v["when"] or ""
+    if v.get("hold_ms"):
+        e.hold_ms = int(v["hold_ms"])
+    return e
+
+
+def save_custom_expression(avatar, key, v, path=CUSTOM_EXPRESSIONS):
+    import json
+    items = _read_custom(path)
+    items[key] = {f: v[f] for f in _EXPR_FIELDS if f in v}
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(items, f, ensure_ascii=False, indent=2)
+    return apply_custom_expression(avatar, key, items[key])
+
+
+def remove_custom_expression(avatar, key, path=CUSTOM_EXPRESSIONS):
+    """배합기에서 만든 것은 없애고, 덮은 것은 원래 값으로 되돌린다."""
+    import json
+    items = _read_custom(path)
+    if key not in items:
+        return False
+    del items[key]
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(items, f, ensure_ascii=False, indent=2)
+    orig = _EXPR_ORIGINAL.pop(key, None)
+    e = avatar.expression(key)
+    if e and orig is None:
+        avatar.expressions.remove(e)
+    elif e:
+        for f, val in orig.items():
+            setattr(e, f, val)
+    return True
+
+
+def load_custom_expressions(avatar, path=CUSTOM_EXPRESSIONS):
+    items = _read_custom(path)
+    for key, v in items.items():
+        apply_custom_expression(avatar, key, v)
+    return len(items)
+
+
+load_custom_expressions(DIA)
 
 # 프로젝트 어디서든 같은 개체를 가리키도록
 AVATAR = DIA

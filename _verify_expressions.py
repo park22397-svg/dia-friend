@@ -16,7 +16,7 @@ import sys
 
 sys.path.insert(0, ".")
 
-from avatar import AVATAR
+from avatar import AVATAR, _EXPR_ORIGINAL
 
 LOCK = "_expressions_locked.json"
 
@@ -27,9 +27,16 @@ FIELDS = [
 
 
 def snapshot():
+    # 코드에 적힌 값만 본다. 배합기(expressions_custom.json)에서 만들거나
+    # 덮은 것은 사람이 눈으로 보고 한 일이라 잠금 밖이다.
     out = {}
     for e in AVATAR.expressions:
+        orig = _EXPR_ORIGINAL.get(e.key, False)
+        if orig is None:
+            continue
         out[e.key] = {f: getattr(e, f) for f in FIELDS}
+        if orig:
+            out[e.key].update({f: orig[f] for f in orig if f in FIELDS})
     return out
 
 
@@ -81,6 +88,11 @@ def main():
                 changed.append((was.get("label"), key, f, a, b))
 
     added = [(k, v["label"]) for k, v in now.items() if k not in locked]
+
+    if _EXPR_ORIGINAL:
+        print(f"\n배합기에서 만들거나 고친 표정 {len(_EXPR_ORIGINAL)}개 (잠금 밖)")
+        for k, o in _EXPR_ORIGINAL.items():
+            print(f"   * {k}" + ("  — 새로 만듦" if o is None else "  — 덮어씀"))
 
     if added:
         print(f"\n새로 생긴 표정 {len(added)}개 (문제 아님)")

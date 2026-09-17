@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>다이아 표정 배합기</title>
+
+    <script src="https://unpkg.com/three@0.137.0/build/three.min.js"></script>
+    <script src="https://unpkg.com/three@0.137.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://unpkg.com/three@0.137.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://unpkg.com/@pixiv/three-vrm@0.6.11/lib/three-vrm.js"></script>
+    <script src="/static/vrm_pick.js"></script>
+
+    <style>
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            background: #14162a;
+            color: #e6e7f2;
+            font-family: 'Malgun Gothic', system-ui, sans-serif;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #stage { flex: 1; position: relative; min-width: 0; }
+        #canvas { width: 100%; height: 100%; display: block; }
+
+        #loading {
+            position: absolute; inset: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 15px; color: #9ea2c8; background: #14162a;
+        }
+
+        #hint {
+            position: absolute; left: 14px; bottom: 12px;
+            font-size: 12px; color: #8f93b8; line-height: 1.7;
+            pointer-events: none;
+        }
+
+        #view {
+            position: absolute; left: 14px; top: 14px;
+            display: flex; gap: 6px;
+        }
+
+        #panel {
+            width: 440px;
+            background: #1b1e36;
+            border-left: 1px solid #2c3050;
+            overflow-y: auto;
+            padding: 14px 16px 40px;
+        }
+
+        h2 {
+            font-size: 13px; color: #aeb2d6; font-weight: normal;
+            margin: 18px 0 8px; letter-spacing: 0.02em;
+        }
+        h2:first-child { margin-top: 0; }
+
+        button {
+            background: #2a2e52; border: 1px solid #3d4270; color: #e6e7f2;
+            padding: 5px 11px; border-radius: 6px; cursor: pointer;
+            font-family: inherit; font-size: 12px;
+        }
+        button:hover { background: #343a66; }
+        button.on { background: #5b4bd6; border-color: #7a6cf0; }
+        button.primary { background: #4b3fc0; border-color: #6d60ea; }
+        button.danger { background: #4a2433; border-color: #7a3a52; }
+        button:disabled { opacity: 0.4; cursor: default; }
+
+        #list { display: flex; flex-wrap: wrap; gap: 5px; }
+        #list button { padding: 4px 9px; }
+        #list button.mine { border-style: dashed; }
+
+        label.field { display: block; font-size: 12px; color: #9ea2c8; margin: 8px 0 4px; }
+
+        input[type=text], textarea, input[type=number] {
+            width: 100%; background: #101228; border: 1px solid #343a5e;
+            color: #e6e7f2; border-radius: 5px; padding: 6px 8px;
+            font-family: inherit; font-size: 13px;
+        }
+        textarea { resize: vertical; min-height: 58px; }
+
+        .note { font-size: 11.5px; color: #8f93b8; line-height: 1.6; margin: 4px 0; }
+        .warn { color: #f0b86a; }
+        .bad { color: #f07a8a; }
+        .good { color: #7ad6a0; }
+
+        .row {
+            display: grid; grid-template-columns: 150px 1fr 44px;
+            align-items: center; gap: 8px; padding: 2px 0;
+            font-size: 12px;
+        }
+        .row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #c3c6e4; }
+        .row.used .name { color: #fff; font-weight: bold; }
+        .row .val { text-align: right; color: #9ea2c8; font-variant-numeric: tabular-nums; }
+        .row input[type=range] { width: 100%; }
+
+        details { border-top: 1px solid #2c3050; padding: 6px 0; }
+        summary { cursor: pointer; font-size: 12.5px; color: #aeb2d6; padding: 3px 0; }
+        summary .cnt { color: #7a6cf0; margin-left: 6px; }
+
+        .bar { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+        #msg { min-height: 18px; font-size: 12px; margin-top: 8px; }
+    </style>
+</head>
+<body>
+
+<div id="stage">
+    <canvas id="canvas"></canvas>
+    <div id="view">
+        <button onclick="aim('face')">얼굴</button>
+        <button onclick="aim('bust')">상반신</button>
+        <button id="btnTalk" onclick="toggleTalk()">말하면서 보기</button>
+    </div>
+    <div id="hint">
+        끌어서 돌리기 · 휠로 당기기<br>
+        '말하면서 보기' 를 켜면 채팅 화면처럼 입을 립싱크에 넘긴다
+    </div>
+    <div id="loading">아바타를 불러오는 중…</div>
+</div>
+
+<div id="panel">
+    <h2>있는 표정 — 누르면 그 배합을 불러온다</h2>
+    <div id="list"></div>
+    <div class="note">점선 테두리는 배합기에서 만들거나 고친 것.</div>
+
+    <h2>지금 배합</h2>
+    <label class="field">이름 — 다이아가 <b>(표정: 이름)</b> 으로 부른다</label>
+    <input type="text" id="label" maxlength="20" placeholder="예: 뾰로통">
+
+    <label class="field">언제 짓는 얼굴인가 — 비워 두면 다이아는 이 얼굴을 모른다</label>
+    <textarea id="when" maxlength="300" placeholder="예: 서운한데 티 내기 싫을 때. 삐친 척하면서 사실은 달래 주길 바랄 때."></textarea>
+    <div class="note" id="whenCost"></div>
+
+    <label class="field">유지 시간 (ms)</label>
+    <input type="number" id="hold" min="500" max="20000" step="100" value="3000" style="width:110px">
+
+    <div class="bar">
+        <button class="primary" id="btnNew" onclick="save(false)">새 표정으로 저장</button>
+        <button id="btnOver" onclick="save(true)" disabled>불러온 표정에 덮어쓰기</button>
+        <button class="danger" id="btnDel" onclick="removeMine()" disabled>배합기 것 지우기</button>
+        <button onclick="zeroAll()">모두 0</button>
+    </div>
+    <div id="msg"></div>
+    <div class="note" id="loadedNote"></div>
+
+    <h2>표정 그룹 <span class="note">— 눈·눈썹·입이 한 덩어리</span></h2>
+    <div id="groups"></div>
+
+    <h2>모프 조각 <span class="note">— 부위를 따로 움직인다</span></h2>
+    <input type="text" id="filter" placeholder="이름으로 거르기 (예: EYE, Sorrow)">
+    <div id="morphs"></div>
+</div>
+
+<script>
+const EDITABLE = {{ 'true' if editable else 'false' }};
+
+// ============================================================
+// 장면
+// ============================================================
+
+const canvas = document.getElementById('canvas');
+const loading = document.getElementById('loading');
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x14162a);
+
+const camera = new THREE.PerspectiveCamera(
+    30, canvas.clientWidth / canvas.clientHeight, 0.05, 40);
+camera.position.set(0, 1.4, 0.8);
+
+const renderer = new THREE.WebGLRenderer({
+    canvas, antialias: true, preserveDrawingBuffer: true });
+renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 1.4, 0);
+controls.update();
+
+const dir = new THREE.DirectionalLight(0xffffff, 1.0);
+dir.position.set(0.5, 1, 1).normalize();
+scene.add(dir);
+scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+
+window.addEventListener('resize', () => {
+    camera.aspect = canvas.clientWidth / canvas.clientHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+});
+
+const DEG = Math.PI / 180;
+
+let currentVRM = null;
+let ENTITY = null;
+let MINE = {};             // key -> 'new' | 'override'
+let loadedKey = null;      // 불러온 표정
+
+const mix = { groups: {}, morphs: {} };
+const morphSlots = {};     // 이름 -> [{mesh, index}]
+let groupNames = [];
+
+// 눈동자 방향은 표정이 아니다
+const SKIP_GROUPS = /^(lookup|lookdown|lookleft|lookright|neutral)$/i;
+
+
+// ============================================================
+// 아바타
+// ============================================================
+
+function openVRM(url, name) {
+    loading.style.display = 'flex';
+    loading.textContent = '아바타를 불러오는 중…';
+
+    if (currentVRM) {
+        scene.remove(currentVRM.scene);
+        currentVRM = null;
+    }
+
+    new THREE.GLTFLoader().load(url, gltf => {
+        if (THREE.VRMUtils) THREE.VRMUtils.removeUnnecessaryJoints(gltf.scene);
+
+        THREE.VRM.from(gltf).then(vrm => {
+            currentVRM = vrm;
+            scene.add(vrm.scene);
+            vrm.scene.rotation.y = Math.PI;
+
+            Object.keys(morphSlots).forEach(k => delete morphSlots[k]);
+            vrm.scene.traverse(o => {
+                if (!o.morphTargetDictionary || !o.morphTargetInfluences) return;
+                Object.keys(o.morphTargetDictionary).forEach(n => {
+                    (morphSlots[n] = morphSlots[n] || []).push({
+                        mesh: o, index: o.morphTargetDictionary[n] });
+                });
+            });
+
+            // 그룹 이름은 파일에 'Joy' 로, 개체에는 'joy'(프리셋 이름)로 적혀 있다.
+            // 프리셋이 있는 것은 프리셋 이름으로 부른다 — 채팅 화면이 그렇게 부른다.
+            const proxy = vrm.blendShapeProxy;
+            const presetMap = (proxy && proxy._blendShapePresetMap) || {};
+            const presetOf = {};
+            Object.keys(presetMap).forEach(p => presetOf[presetMap[p]] = p);
+            groupNames = (proxy && proxy.expressions || [])
+                .map(n => presetOf[n] || n)
+                .filter(n => n !== 'unknown' && !SKIP_GROUPS.test(n));
+
+            loading.style.display = 'none';
+            VrmPick.say(name || '다이아');
+
+            loadEntity().then(() => {
+                applyBasePose();
+                buildSliders();
+                applyMix();
+                aim('face');
+            });
+        }).catch(e => {
+            loading.textContent = 'VRM 이 아니거나 읽을 수 없다 — ' + e;
+        });
+    }, p => {
+        if (p.total) loading.textContent =
+            '아바타를 불러오는 중… ' + Math.round(p.loaded / p.total * 100) + '%';
+    }, e => {
+        loading.textContent = '불러오기 실패 — ' + e;
+    });
+}
+
+VrmPick.mount({ onOpen: (url, name) => openVRM(url, name) });
+
+fetch('/api/avatar').then(r => r.json()).then(A => {
+    openVRM((A.model && A.model.vrm) || '/static/avatar.vrm', '다이아');
+}).catch(() => openVRM('/static/avatar.vrm', '다이아'));
+
+
+async function loadEntity() {
+    const [a, c] = await Promise.all([
+        fetch('/api/avatar').then(r => r.json()),
+        fetch('/api/expressions/custom').then(r => r.json()),
+    ]);
+    ENTITY = a;
+    MINE = c.items || {};
+    buildList();
+}
+
+// 팔이 T 로 벌어져 있으면 얼굴 옆이 가려진다. 채팅 화면과 같은 기준자세로 선다.
+function applyBasePose() {
+    const bp = (ENTITY && ENTITY.base_pose) || {};
+    Object.keys(bp).forEach(n => {
+        let node = null;
+        try { node = currentVRM.humanoid.getBoneNode(n); } catch (e) {}
+        if (node && Array.isArray(bp[n]))
+            node.rotation.set(bp[n][0] * DEG, bp[n][1] * DEG, bp[n][2] * DEG);
+    });
+}
+
+function aim(what) {
+    if (!currentVRM) return;
+    let head = null;
+    try { head = currentVRM.humanoid.getBoneNode('head'); } catch (e) {}
+    const p = new THREE.Vector3(0, 1.4, 0);
+    if (head) head.getWorldPosition(p);
+
+    if (what === 'face') {
+        p.y += 0.06;
+        controls.target.copy(p);
+        camera.position.set(p.x, p.y, p.z + 0.55);
+    } else {
+        p.y -= 0.12;
+        controls.target.copy(p);
+        camera.position.set(p.x, p.y, p.z + 1.3);
+    }
+    controls.update();
+}
+
+
+// ============================================================
+// 섞기
+// ============================================================
+
+function setMorph(name, v) {
+    (morphSlots[name] || []).forEach(s => s.mesh.morphTargetInfluences[s.index] = v);
+}
+
+// 말하는 중이면 채팅 화면이 그러듯 그룹을 눈·눈썹 조각으로 바꾸고 입 조각은 뺀다
+let talking = false;
+let talkT = 0;
+
+function applyMix() {
+    if (!currentVRM || !currentVRM.blendShapeProxy) return;
+    const proxy = currentVRM.blendShapeProxy;
+    const SP = (ENTITY && ENTITY.behavior && ENTITY.behavior.speaking) || {};
+    const toParts = SP.group_to_parts || {};
+    const mouthPre = SP.mouth_prefixes || ['Fcl_MTH_', 'Fcl_HA_'];
+
+    groupNames.forEach(n => { try { proxy.setValue(n, 0); } catch (e) {} });
+    Object.keys(morphSlots).forEach(n => setMorph(n, 0));
+
+    Object.keys(mix.groups).forEach(n => {
+        const v = mix.groups[n];
+        if (talking && toParts[n]) {
+            toParts[n].forEach(m => setMorph(m, v));
+            return;
+        }
+        try { proxy.setValue(n, v); } catch (e) {}
+    });
+
+    Object.keys(mix.morphs).forEach(n => {
+        if (talking && mouthPre.some(p => n.indexOf(p) === 0)) return;
+        setMorph(n, mix.morphs[n]);
+    });
+
+    proxy.update();
+}
+
+function toggleTalk() {
+    talking = !talking;
+    document.getElementById('btnTalk').classList.toggle('on', talking);
+    applyMix();
+}
+
+const clock = new THREE.Clock();
+(function animate() {
+    requestAnimationFrame(animate);
+    const dt = clock.getDelta();
+    if (currentVRM) {
+        if (talking) {
+            talkT += dt;
+            const a = Math.max(0, Math.sin(talkT * 11)) * 0.6;
+            try { currentVRM.blendShapeProxy.setValue('a', a); } catch (e) {}
+        }
+        currentVRM.update(dt);
+    }
+    renderer.render(scene, camera);
+})();
+
+
+// ============================================================
+// 조작판
+// ============================================================
+
+function slider(name, kind) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.dataset.name = name;
+    row.dataset.kind = kind;
+
+    const lab = document.createElement('span');
+    lab.className = 'name';
+    lab.textContent = name;
+    lab.title = name;
+
+    const r = document.createElement('input');
+    r.type = 'range'; r.min = 0; r.max = 1; r.step = 0.01; r.value = 0;
+
+    const val = document.createElement('span');
+    val.className = 'val';
+    val.textContent = '0';
+
+    r.oninput = () => {
+        const v = parseFloat(r.value);
+        if (v > 0) mix[kind][name] = v; else delete mix[kind][name];
+        val.textContent = v ? v.toFixed(2) : '0';
+        row.classList.toggle('used', v > 0);
+        countUsed();
+        applyMix();
+    };
+    // 두 번 누르면 0 으로
+    lab.ondblclick = () => { r.value = 0; r.oninput(); };
+
+    row.append(lab, r, val);
+    return row;
+}
+
+function buildSliders() {
+    const g = document.getElementById('groups');
+    g.innerHTML = '';
+    groupNames.forEach(n => g.appendChild(slider(n, 'groups')));
+
+    // 조각은 부위로 묶는다: Fcl_EYE_Close → EYE
+    const m = document.getElementById('morphs');
+    m.innerHTML = '';
+    const parts = {};
+    Object.keys(morphSlots).sort().forEach(n => {
+        const hit = /^Fcl_([A-Z]+)_/.exec(n);
+        const part = hit ? hit[1] : '기타';
+        (parts[part] = parts[part] || []).push(n);
+    });
+
+    const LABEL = { BRW: '눈썹', EYE: '눈', MTH: '입', HA: '이', ALL: '얼굴 전체' };
+    Object.keys(parts).forEach(part => {
+        const d = document.createElement('details');
+        d.dataset.part = part;
+        const s = document.createElement('summary');
+        s.innerHTML = (LABEL[part] ? LABEL[part] + ' ' : '') + part
+            + ' <span class="note">(' + parts[part].length + ')</span><span class="cnt"></span>';
+        d.appendChild(s);
+        parts[part].forEach(n => d.appendChild(slider(n, 'morphs')));
+        m.appendChild(d);
+    });
+}
+
+document.getElementById('filter').oninput = e => {
+    const q = e.target.value.trim().toLowerCase();
+    document.querySelectorAll('#morphs details').forEach(d => {
+        let any = false;
+        d.querySelectorAll('.row').forEach(r => {
+            const hit = !q || r.dataset.name.toLowerCase().includes(q);
+            r.style.display = hit ? '' : 'none';
+            any = any || hit;
+        });
+        d.style.display = any ? '' : 'none';
+        if (q) d.open = any;
+    });
+};
+
+function countUsed() {
+    document.querySelectorAll('#morphs details').forEach(d => {
+        const n = d.querySelectorAll('.row.used').length;
+        d.querySelector('.cnt').textContent = n ? '● ' + n : '';
+    });
+}
+
+function setMix(groups, morphs) {
+    mix.groups = {}; mix.morphs = {};
+    document.querySelectorAll('.row').forEach(row => {
+        const src = row.dataset.kind === 'groups' ? groups : morphs;
+        const v = (src && src[row.dataset.name]) || 0;
+        const r = row.querySelector('input');
+        r.value = v;
+        if (v > 0) mix[row.dataset.kind][row.dataset.name] = v;
+        row.querySelector('.val').textContent = v ? (+v).toFixed(2) : '0';
+        row.classList.toggle('used', v > 0);
+        if (v > 0 && row.dataset.kind === 'morphs') row.parentElement.open = true;
+    });
+
+    // 이 아바타에 없는 이름은 슬라이더가 없어 조용히 빠진다. 알려 준다.
+    const missing = Object.keys(groups || {}).filter(n => !groupNames.includes(n))
+        .concat(Object.keys(morphs || {}).filter(n => !morphSlots[n]));
+    countUsed();
+    applyMix();
+    return missing;
+}
+
+function zeroAll() {
+    setMix({}, {});
+}
+
+
+// ============================================================
+// 목록 · 불러오기
+// ============================================================
+
+function buildList() {
+    const box = document.getElementById('list');
+    box.innerHTML = '';
+    (ENTITY.expressions || []).forEach(e => {
+        if (e.key === 'neutral') return;
+        const b = document.createElement('button');
+        b.textContent = e.label;
+        b.title = e.key + (e.when ? '\n' + e.when : '');
+        if (MINE[e.key]) b.classList.add('mine');
+        if (e.key === loadedKey) b.classList.add('on');
+        b.onclick = () => loadExpression(e.key);
+        box.appendChild(b);
+    });
+}
+
+function loadExpression(key) {
+    const e = ENTITY.expressions.find(x => x.key === key);
+    if (!e) return;
+    loadedKey = key;
+
+    // 놀람처럼 그룹 대신 대체값으로 짓는 표정도 있다
+    const groups = Object.keys(e.blendshapes || {}).length
+        ? e.blendshapes : (e.fallback_blendshapes || {});
+    const missing = setMix(groups, e.morphs || {});
+
+    document.getElementById('label').value = e.label;
+    document.getElementById('when').value = e.when || '';
+    document.getElementById('hold').value = e.hold_ms || 3000;
+    updateWhenCost();
+
+    const notes = [];
+    if (e.source === 'special')
+        notes.push('<span class="warn">채팅 화면에서는 표현용 얼굴(body.vrm)로 짓는 표정이라 여기와 다르게 보인다.</span>');
+    if (!Object.keys(e.blendshapes || {}).length && Object.keys(e.fallback_blendshapes || {}).length)
+        notes.push('<span class="warn">이 표정은 아바타에 놀람 그룹이 없을 때의 대체값을 보여 주고 있다.</span>');
+    if (missing.length)
+        notes.push('<span class="bad">이 아바타에 없는 이름: ' + missing.join(', ') + '</span>');
+    if (e.when && (e.live_triggers || []).some(t => /\p{Extended_Pictographic}/u.test(t)))
+        notes.push('다이아는 이 얼굴을 이모지로 고른다.');
+    if (!MINE[key])
+        notes.push('코드에 잠근 표정이다. 덮어쓰면 expressions_custom.json 에 적히고, 지우면 원래 값으로 돌아간다.');
+    document.getElementById('loadedNote').innerHTML = notes.join('<br>');
+
+    document.getElementById('btnOver').disabled = !EDITABLE;
+    document.getElementById('btnOver').textContent = '"' + e.label + '" 에 덮어쓰기';
+    document.getElementById('btnDel').disabled = !EDITABLE || !MINE[key];
+    buildList();
+    msg('');
+}
+
+
+// ============================================================
+// 저장
+// ============================================================
+
+function msg(html, cls) {
+    const m = document.getElementById('msg');
+    m.className = cls || '';
+    m.innerHTML = html;
+}
+
+// '언제' 는 그대로 프롬프트에 들어간다. 다이아의 여지를 얼마나 먹는지 보인다.
+function updateWhenCost() {
+    const label = document.getElementById('label').value.trim();
+    const when = document.getElementById('when').value.trim();
+    const el = document.getElementById('whenCost');
+    if (!when) {
+        el.textContent = '프롬프트에 안 들어간다 — 배합만 남는다.';
+        return;
+    }
+    const n = ('- (표정: ' + label + ')\n    ' + when + '\n').length;
+    el.innerHTML = '프롬프트에 <b>' + n + '자</b> 더해진다. 무엇을 하라고가 아니라 어떤 때인지만 적을 것.';
+}
+document.getElementById('when').oninput = updateWhenCost;
+document.getElementById('label').oninput = updateWhenCost;
+
+async function save(overwrite) {
+    if (!EDITABLE) { msg('이 컴퓨터(localhost)에서 열어야 저장할 수 있다.', 'bad'); return; }
+    if (!Object.keys(mix.groups).length && !Object.keys(mix.morphs).length) {
+        msg('아무것도 안 섞었다.', 'bad'); return;
+    }
+    const body = {
+        label: document.getElementById('label').value.trim(),
+        when: document.getElementById('when').value.trim(),
+        hold_ms: parseInt(document.getElementById('hold').value, 10) || 3000,
+        blendshapes: mix.groups,
+        morphs: mix.morphs,
+    };
+    if (overwrite) {
+        if (!loadedKey) return;
+        const e = ENTITY.expressions.find(x => x.key === loadedKey);
+        if (!MINE[loadedKey] && !confirm('"' + e.label + '" 은 사람이 맞춰 잠근 표정이다. 덮어쓸까?\n(지우기로 언제든 원래대로 돌아간다)')) return;
+        body.key = loadedKey;
+    }
+
+    const r = await fetch('/api/expressions/custom', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!j.ok) { msg(j.error || ('실패 — HTTP ' + r.status), 'bad'); return; }
+
+    await loadEntity();
+    loadExpression(j.expression.key);
+    msg('"' + j.expression.label + '" 저장했다. 채팅 화면은 새로 고치면 쓴다.', 'good');
+}
+
+async function removeMine() {
+    if (!loadedKey || !MINE[loadedKey]) return;
+    const e = ENTITY.expressions.find(x => x.key === loadedKey);
+    const what = MINE[loadedKey] === 'new' ? '지울까' : '원래 값으로 되돌릴까';
+    if (!confirm('"' + e.label + '" — ' + what + '?')) return;
+
+    const r = await fetch('/api/expressions/custom/' + encodeURIComponent(loadedKey), { method: 'DELETE' });
+    const j = await r.json().catch(() => ({}));
+    if (!j.ok) { msg(j.error || ('실패 — HTTP ' + r.status), 'bad'); return; }
+
+    const key = loadedKey;
+    const wasNew = MINE[key] === 'new';
+    await loadEntity();
+    if (wasNew) {
+        loadedKey = null;
+        zeroAll();
+        document.getElementById('btnOver').disabled = true;
+        document.getElementById('btnDel').disabled = true;
+        document.getElementById('loadedNote').innerHTML = '';
+        buildList();
+        msg('지웠다.', 'good');
+    } else {
+        loadExpression(key);
+        msg('원래 값으로 되돌렸다.', 'good');
+    }
+}
+
+if (!EDITABLE) {
+    document.getElementById('btnNew').disabled = true;
+    msg('밖에서 열었다 — 섞어 보기만 된다. 저장은 이 컴퓨터(localhost)에서.', 'warn');
+}
+updateWhenCost();
+</script>
+</body>
+</html>

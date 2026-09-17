@@ -3822,6 +3822,102 @@ def rig_page():
 
 
 # ============================================================
+# 표정 배합기
+#
+# 표정 그룹과 모프 조각을 슬라이더로 섞어 보고 이름을 붙여 둔다.
+# 적는 곳은 expressions_custom.json — 코드의 잠근 값은 안 건드린다.
+# 표정은 모두의 다이아에게 걸리므로 이 컴퓨터에서만 고칠 수 있다.
+# ============================================================
+
+def _from_this_pc():
+    if (request.headers.get("X-Forwarded-For")
+            or request.headers.get("CF-Connecting-IP")):
+        return False
+    return request.remote_addr in ("127.0.0.1", "::1")
+
+
+@app.route("/face")
+def face_page():
+    return render_template("face.html", editable=_from_this_pc())
+
+
+@app.route("/api/expressions/custom")
+def custom_expression_list_api():
+    from avatar import _EXPR_ORIGINAL
+    return jsonify({"ok": True, "editable": _from_this_pc(),
+                    "items": {k: ("new" if o is None else "override")
+                              for k, o in _EXPR_ORIGINAL.items()}})
+
+
+@app.route("/api/expressions/custom", methods=["POST"])
+def custom_expression_save_api():
+    import re
+    from avatar import save_custom_expression
+
+    if not _from_this_pc():
+        return jsonify({"ok": False, "error": "이 컴퓨터에서만 고칠 수 있다."}), 403
+
+    data = request.get_json(silent=True) or {}
+    label = str(data.get("label") or "").strip()[:20]
+    key = str(data.get("key") or "").strip()
+
+    if not label:
+        return jsonify({"ok": False, "error": "이름을 적어야 한다."}), 400
+
+    # 괄호로 부르는 이름이라 괄호·콜론이 들어가면 표시가 깨진다
+    if re.search(r"[()（）:：]", label):
+        return jsonify({"ok": False, "error": "이름에 괄호나 콜론은 못 쓴다."}), 400
+
+    clash = next((e for e in AVATAR.expressions
+                  if e.label == label and e.key != key), None)
+    if clash:
+        return jsonify({"ok": False,
+                        "error": f"'{label}' 은 이미 있는 이름이다."}), 400
+
+    if not re.fullmatch(r"[a-z0-9_]{1,40}", key):
+        n = 1
+        while AVATAR.expression(f"custom_{n}"):
+            n += 1
+        key = f"custom_{n}"
+
+    def nums(d):
+        out = {}
+        for k, v in (d or {}).items():
+            try:
+                v = round(float(v), 3)
+            except (TypeError, ValueError):
+                continue
+            if v > 0:
+                out[str(k)] = min(v, 1.0)
+        return out
+
+    e = save_custom_expression(AVATAR, key, {
+        "label": label,
+        "when": str(data.get("when") or "").strip()[:300],
+        "blendshapes": nums(data.get("blendshapes")),
+        "morphs": nums(data.get("morphs")),
+        "hold_ms": max(500, min(int(data.get("hold_ms") or 3000), 20000)),
+    })
+
+    print(f"[배합기] {e.label} ({e.key}) 적음")
+    return jsonify({"ok": True, "expression": e.to_dict()})
+
+
+@app.route("/api/expressions/custom/<key>", methods=["DELETE"])
+def custom_expression_remove_api(key):
+    from avatar import remove_custom_expression
+
+    if not _from_this_pc():
+        return jsonify({"ok": False, "error": "이 컴퓨터에서만 고칠 수 있다."}), 403
+
+    if not remove_custom_expression(AVATAR, key):
+        return jsonify({"ok": False, "error": "배합기에서 만든 표정이 아니다."}), 404
+
+    print(f"[배합기] {key} 지움/되돌림")
+    return jsonify({"ok": True})
+
+
+# ============================================================
 # 서버 실행
 # ============================================================
 
