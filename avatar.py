@@ -4734,6 +4734,11 @@ DIA = VirtualAvatar(
             # 팔꿈치까지 늘어났다. VRoid 가 내보낸 원본 교복도 똑같이 찌그러져서
             # 옷을 떼어 붙인 탓이 아니라 자세 탓으로 판정했다.
             # 비틀기(x)는 0, 팔꿈치는 12도만 — 소매가 가장 덜 찌그러지는 자리다.
+            #
+            # 그러면 손바닥이 옆(바깥)을 본다. 손바닥을 정면으로 돌리는 데
+            # 비틀기 75도가 든다. 아래팔 30 + 손목 45 로 나눴다 — 한 관절에
+            # 몰면 소매나 손목이 꼬인다. 손바닥 법선(손 평면을 굽은 손가락
+            # 끝 쪽으로 맞춘 것)의 z 가 0.29 → 0.95.
             duration=2.8,
             loop=False,
             keys=[
@@ -4746,18 +4751,18 @@ DIA = VirtualAvatar(
                 {"t": 0.7, "bones": {
                     "leftShoulder": [0, 0, -12],
                     "leftUpperArm": [0, -15, -65],
-                    "leftLowerArm": [0, -12, 0], "leftHand": [0, 0, 0],
+                    "leftLowerArm": [30, -12, 0], "leftHand": [45, 0, 0],
                     "rightShoulder": [0, 0, 12],
                     "rightUpperArm": [0, 15, 65],
-                    "rightLowerArm": [0, 12, 0], "rightHand": [0, 0, 0],
+                    "rightLowerArm": [30, 12, 0], "rightHand": [45, 0, 0],
                     "spine": [5, 0, 0], "chest": [10, 0, 0], "head": [12, 0, 0]}},
                 {"t": 1.6, "bones": {
                     "leftShoulder": [0, 0, -12],
                     "leftUpperArm": [0, -15, -65],
-                    "leftLowerArm": [0, -12, 0], "leftHand": [0, 0, 0],
+                    "leftLowerArm": [30, -12, 0], "leftHand": [45, 0, 0],
                     "rightShoulder": [0, 0, 12],
                     "rightUpperArm": [0, 15, 65],
-                    "rightLowerArm": [0, 12, 0], "rightHand": [0, 0, 0],
+                    "rightLowerArm": [30, 12, 0], "rightHand": [45, 0, 0],
                     "spine": [7, 0, 0], "chest": [14, 0, 0], "head": [14, 0, 0]}},
                 {"t": 2.8, "bones": {
                     "leftShoulder": [0, 0, 0], "leftUpperArm": [0, 0, 68.75],
