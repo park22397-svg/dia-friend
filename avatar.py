@@ -4657,6 +4657,13 @@ DIA = VirtualAvatar(
             # 되기 때문이다. 그래서 '오른팔이 위로 지나간다(아래팔 4cm 위,
             # 손 5cm 위, 2cm 앞)' 와 '팔짱 높이는 그대로' 를 조건에 넣어
             # 다시 풀었다 → 손 높이 차 5.7cm, 오른손 0mm · 왼손 8.1mm.
+            #
+            # 그래도 안 맞았다(사용자): 팔짱은 한쪽 손을 **올리는 게 아니라
+            # 내려야** 한다. 위로 지나가는 팔의 손만 반대쪽 위팔에 얹히고,
+            # 밑으로 지나가는 팔의 손은 그 아래에서 나온다. 그래서 오른손은
+            # 그 자리에 두고 왼손만 6cm 내리도록 목표를 바꿔 다시 풀었다
+            # → 손 높이 차 10.4cm. 손목 각도까지 훑어 옷 파고듦을 줄였다
+            # (왼손 13.3 → 4.4mm, 오른손 0mm).
             keys=[
                 {"t": 0.0, "bones": {
                     "leftShoulder": [0, 0, 0], "leftUpperArm": [0, 0, 68.75],
@@ -4673,20 +4680,20 @@ DIA = VirtualAvatar(
                     "rightLowerArm": [12.87, 50.39, 0], "rightHand": [0, 0, 0],
                     "chest": [0, 2, 0], "head": [-2, 5, 0]}},
                 {"t": 0.55, "bones": {
-                    "leftShoulder": [2.75, -19.69, -5.05],
-                    "leftUpperArm": [-82.17, -74.09, -16.82],
-                    "leftLowerArm": [42.55, -107.88, 0], "leftHand": [0, 0, 0],
-                    "rightShoulder": [5.98, 20.94, -5.18],
-                    "rightUpperArm": [108.16, 98.5, -161.28],
-                    "rightLowerArm": [37.15, 104.44, 0], "rightHand": [0, 0, 0],
+                    "leftShoulder": [2.75, -20.2, -5.09],
+                    "leftUpperArm": [-81.11, -73.33, -17.38],
+                    "leftLowerArm": [34.29, -98.07, 0], "leftHand": [20, -20, -20],
+                    "rightShoulder": [5.98, 22.0, -9.75],
+                    "rightUpperArm": [107.03, 98.7, -160.78],
+                    "rightLowerArm": [38.54, 104.37, 0], "rightHand": [-20, -20, -20],
                     "chest": [0, 6, 0], "head": [-5, 12, 0]}},
                 {"t": 2.0, "bones": {
-                    "leftShoulder": [2.75, -19.69, -5.05],
-                    "leftUpperArm": [-82.17, -74.09, -16.82],
-                    "leftLowerArm": [42.55, -107.88, 0], "leftHand": [0, 0, 0],
-                    "rightShoulder": [5.98, 20.94, -5.18],
-                    "rightUpperArm": [108.16, 98.5, -161.28],
-                    "rightLowerArm": [37.15, 104.44, 0], "rightHand": [0, 0, 0],
+                    "leftShoulder": [2.75, -20.2, -5.09],
+                    "leftUpperArm": [-81.11, -73.33, -17.38],
+                    "leftLowerArm": [34.29, -98.07, 0], "leftHand": [20, -20, -20],
+                    "rightShoulder": [5.98, 22.0, -9.75],
+                    "rightUpperArm": [107.03, 98.7, -160.78],
+                    "rightLowerArm": [38.54, 104.37, 0], "rightHand": [-20, -20, -20],
                     "chest": [0, 5, 0], "head": [-4, 9, 0]}},
                 # 돌아올 때도 같은 자리를 거친다
                 {"t": 2.3, "bones": {
