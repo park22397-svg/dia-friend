@@ -4069,26 +4069,38 @@ DIA = VirtualAvatar(
             expression="fun",
             keys=[
                 {"t": 0.0, "bones": {
+                    "rightShoulder": [0, 0, 0],
                     "rightUpperArm": [0, 0, -68.75], "rightLowerArm": [0, 0, -10],
                     "rightHand": [0, 0, 0], "head": [0, 0, 0], "chest": [0, 0, 0]}},
                 # 손바닥이 정면(모델 기준 -Z)을 보도록 팔 축으로 90도 비튼다.
                 # 팔을 드는 회전은 z축이라 x축 트위스트 값에는 영향을 주지 않는다.
+                #
+                # 2026-09-18: 어깨를 내리고 팔꿈치를 더 접었다(사용자).
+                # 위팔 26 → -10, 아래팔 98 → 130, 쇄골 -8. 팔꿈치가 어깨보다
+                # 6.8cm 아래로 오고 손은 머리 높이다(전에는 팔꿈치가 어깨보다
+                # 9.6cm 위, 손이 머리 위 16cm). 흔드는 폭(아래팔 30도)은 그대로.
                 {"t": 0.5, "bones": {
-                    "rightUpperArm": [0, 0, 14], "rightLowerArm": [0, 0, 68],
+                    "rightShoulder": [0, 0, -8],
+                    "rightUpperArm": [0, 0, -18], "rightLowerArm": [0, 0, 100],
                     "rightHand": [90, 0, 0], "head": [0, -6, 5], "chest": [0, -5, 0]}},
                 {"t": 0.9, "bones": {
-                    "rightUpperArm": [0, 0, 26], "rightLowerArm": [0, 0, 98],
+                    "rightShoulder": [0, 0, -8],
+                    "rightUpperArm": [0, 0, -10], "rightLowerArm": [0, 0, 130],
                     "rightHand": [90, 0, 0], "head": [0, -6, 5], "chest": [0, -5, 0]}},
                 {"t": 1.3, "bones": {
-                    "rightUpperArm": [0, 0, 14], "rightLowerArm": [0, 0, 68],
+                    "rightShoulder": [0, 0, -8],
+                    "rightUpperArm": [0, 0, -18], "rightLowerArm": [0, 0, 100],
                     "rightHand": [90, 0, 0], "head": [0, -6, 5], "chest": [0, -5, 0]}},
                 {"t": 1.7, "bones": {
-                    "rightUpperArm": [0, 0, 26], "rightLowerArm": [0, 0, 98],
+                    "rightShoulder": [0, 0, -8],
+                    "rightUpperArm": [0, 0, -10], "rightLowerArm": [0, 0, 130],
                     "rightHand": [90, 0, 0], "head": [0, -6, 5], "chest": [0, -5, 0]}},
                 {"t": 2.1, "bones": {
-                    "rightUpperArm": [0, 0, 18], "rightLowerArm": [0, 0, 82],
+                    "rightShoulder": [0, 0, -5],
+                    "rightUpperArm": [0, 0, -14], "rightLowerArm": [0, 0, 115],
                     "rightHand": [90, 0, 0], "head": [0, -4, 3], "chest": [0, -3, 0]}},
                 {"t": 2.6, "bones": {
+                    "rightShoulder": [0, 0, 0],
                     "rightUpperArm": [0, 0, -68.75], "rightLowerArm": [0, 0, -10],
                     "rightHand": [0, 0, 0], "head": [0, 0, 0], "chest": [0, 0, 0]}},
             ],
