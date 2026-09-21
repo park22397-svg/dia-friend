@@ -146,6 +146,36 @@ def extract_cues(text):
                     i += 1
                 continue
 
+            # 노래 한 줄. (노래: 반짝이는 오늘도)
+            #
+            # 옷·장소와 같은 자리에서 같은 방식으로 걷어낸다. 다른
+            # 것은 하나뿐이다 — 이건 **말이 아니라 소리**라서 본문에
+            # 남기지 않는다. 가사를 글로도 적고 부르기까지 하면
+            # 같은 말을 두 번 하는 꼴이 된다.
+            want_song = AVATAR.song_marker(inner)
+
+            if want_song:
+                cues.append({
+                    "at": len(out),
+                    "type": "song",
+                    "line": want_song,
+                })
+                i = m.end()
+                while i < n and text[i] == " " and (not out or out[-1] == " "):
+                    i += 1
+                continue
+
+            # 사진을 찍자. (찍자)
+            if AVATAR.is_shoot(inner):
+                cues.append({
+                    "at": len(out),
+                    "type": "shoot",
+                })
+                i = m.end()
+                while i < n and text[i] == " " and (not out or out[-1] == " "):
+                    i += 1
+                continue
+
             want_place = AVATAR.place_marker(inner)
 
             if want_place:
@@ -1024,6 +1054,37 @@ def process_chat(user_text, seeing=None, cut_off=False, woke=False):
             "role": "system",
             "content": f"[입은 옷] {_wr}",
         })
+
+    # 지금이 어떤 자리인가.
+    #
+    # 시간·곳·옷과 같은 자리에 같은 방식으로 넣는다. 다른 것은
+    # 하나뿐이다 — **이 자리에서만 할 수 있는 일이 따라붙는다.**
+    #
+    # 노래방에 있다는 것은 배경이 노래방이라는 뜻이 아니라
+    # 노래를 부를 수 있다는 뜻이다. 그래서 곳 한 줄로는 모자라다.
+    #
+    # 자리를 벗어나면 그 몇 줄은 사라진다. 평소 프롬프트는
+    # 한 자도 안 는다. [[dia-autonomy]]
+    try:
+        import main as _srv
+        _scene = _srv._scene_update(user_text, _here)
+    except Exception as e:
+        print(f"[장면 읽기 오류]: {e}")
+        _scene = None
+
+    if _scene:
+        _sn = AVATAR.scene_note(_scene)
+
+        if _sn:
+            messages.append({
+                "role": "system",
+                "content": f"[지금 하는 일] {_sn}",
+            })
+
+        _sb = AVATAR.scene_block(_scene)
+
+        if _sb:
+            messages.append({"role": "system", "content": _sb})
 
     # 자고 있다가 깨어났는가.
     #

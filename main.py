@@ -5,6 +5,7 @@
 import json
 import os
 import secrets
+import time
 from datetime import timedelta
 
 from flask import (
@@ -455,7 +456,7 @@ def chat_api():
         )
 
         # 답에 (배경: 공원) · (옷: 교복) 이 섞여 있으면 실제로 옮기고 갈아입는다
-        result = _apply_wear(_apply_place(result))
+        result = _apply_shoot(_apply_song(_apply_wear(_apply_place(result))))
 
         return jsonify(
             result
@@ -2929,6 +2930,185 @@ def _place_image(name):
     pick = _rnd.choice(hits)
 
     return {"name": pick, "url": prefix + quote(pick)}
+
+
+# ============================================================
+# 장면 — 지금이 어떤 자리인가
+#
+# 장소와 나란히 둔다. 다른 것은 두 가지다.
+#
+#   1. 배경 그림이 없어도 열린다. 노래방 사진이 없다고 노래를
+#      못 부를 이유는 없다.
+#   2. 열려 있는 동안에만 프롬프트가 몇 줄 는다.
+#
+# 기억에 적는 이유도 장소와 같다 — 창을 닫았다 열어도 부르던
+# 노래가 이어져야 한다.
+# ============================================================
+
+def _scene_now():
+    """지금 열려 있는 장면. 없으면 None."""
+    try:
+        key = (memory_manager.load_memory_data().get("scene") or {}).get("key")
+    except Exception:
+        return None
+
+    return AVATAR.scene(key) if key else None
+
+
+def _scene_set(key):
+    data = memory_manager.load_memory_data()
+
+    if key:
+        data["scene"] = {"key": key, "since": time.time()}
+    else:
+        data.pop("scene", None)
+
+    memory_manager.save_memory_data(data)
+
+
+def _scene_update(user_text, here=None):
+    """이번 말과 있는 곳을 보고 장면을 열거나 닫는다. 지금 장면을 돌려준다.
+
+    **여는 길이 셋인 이유.** 사람은 한 가지 방식으로만 자리를
+    옮기지 않는다.
+
+      "노래방 왔어"        — 말로 알린다
+      (배경: 노래방)       — 정말로 그리로 갔다
+      노래방에 있는 채로    — 이미 와 있다
+
+    셋 다 '알아챘다' 로 쳐야 알아챈 것이다. 하나만 받으면
+    나머지 두 길에서는 못 알아듣는 바보가 된다.
+
+    닫는 것은 말로만 한다. 시간이 지나면 저절로 닫히게 하면,
+    노래를 부르다 말고 한참 이야기한 뒤 다시 부를 때 못 부른다.
+    """
+    now = _scene_now()
+
+    # 그만하자고 했다
+    if AVATAR.scene_leaves(user_text):
+        if now:
+            print(f"[장면]: {now.get('label')} 끝")
+            _scene_set(None)
+        return None
+
+    # 말로 알렸다
+    want = AVATAR.scene_of_words(user_text)
+
+    # 그 자리에 있다
+    if not want:
+        want = AVATAR.scene_of_place(here if here is not None else _place_here())
+
+    if want:
+        if not now or now.get("key") != want.get("key"):
+            print(f"[장면]: {(now or {}).get('label') or '없음'}"
+                  f" -> {want.get('label')}")
+            _scene_set(want.get("key"))
+        return want
+
+    # 다른 곳으로 옮겨 갔으면 그 자리의 일은 끝난 것이다.
+    #
+    # 노래방에서 공원으로 갔는데 마이크를 들고 있으면 안 된다.
+    if now and now.get("places"):
+        h = here if here is not None else _place_here()
+
+        if h and not AVATAR.scene_of_place(h):
+            print(f"[장면]: {now.get('label')} 끝 (자리를 옮김)")
+            _scene_set(None)
+            return None
+
+    return now
+
+
+def _apply_song(result):
+    """답에 섞인 노래 표시를 악보로 바꾼다.
+
+    가사만 받아서 음은 서버가 붙인다. 모델에게 음을 적게 하면
+    음치가 되고, 적으라는 말 자체가 규칙 한 줄이다.
+
+    **가사는 본문에 안 남긴다.** 부를 것을 글로도 적으면 같은
+    말을 두 번 하는 꼴이다.
+    """
+    if not isinstance(result, dict):
+        return result
+
+    cues = result.get("cues")
+
+    if not isinstance(cues, list) or not cues:
+        return result
+
+    lines, keep = [], []
+
+    for c in cues:
+        if isinstance(c, dict) and c.get("type") == "song":
+            line = (c.get("line") or "").strip()
+            if line:
+                lines.append(line)
+            continue
+        keep.append(c)
+
+    if not lines:
+        return result
+
+    result["cues"] = keep
+
+    cap = AVATAR.song_conf().get("max_lines", 6)
+
+    if len(lines) > cap:
+        print(f"[노래]: {len(lines)}줄 중 {cap}줄만 부릅니다")
+        lines = lines[:cap]
+
+    score = AVATAR.score(lines)
+
+    if not score:
+        return result
+
+    result["song"] = score
+
+    print(f"[노래]: {score['melody']} · {len(lines)}줄 · "
+          + " / ".join(lines))
+
+    return result
+
+
+def _apply_shoot(result):
+    """찍자는 표시를 실제 촬영으로 바꾼다.
+
+    컷 수·카운트·포즈는 서버가 쥔다. 놀이 규칙과 같은 자리다 —
+    프롬프트에 안 적어야 모델의 여지를 안 뺏는다.
+    """
+    if not isinstance(result, dict):
+        return result
+
+    cues = result.get("cues")
+
+    if not isinstance(cues, list) or not cues:
+        return result
+
+    want = False
+    keep = []
+
+    for c in cues:
+        if isinstance(c, dict) and c.get("type") == "shoot":
+            want = True
+            continue
+        keep.append(c)
+
+    if not want:
+        return result
+
+    result["cues"] = keep
+
+    shot = AVATAR.shot_conf()
+
+    if not shot:
+        return result
+
+    # 말만 보내지 않는다. 찍는 동안 쓸 것을 다 실어 보낸다.
+    result["shoot"] = {k: v for k, v in shot.items() if k != "words"}
+
+    print(f"[네컷]: {result['shoot'].get('cuts')}컷 찍습니다")
+
+    return result
 
 
 def _wardrobe_items():

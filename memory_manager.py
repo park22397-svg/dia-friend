@@ -256,6 +256,17 @@ def load_memory_data():
     if not isinstance(wearing, dict):
         wearing = {}
 
+    # 지금이 어떤 자리인가 — 노래방인가, 사진 찍는 중인가.
+    #
+    # **장소·옷과 똑같은 함정에 걸린다.** 이 함수가 아는 항목만 골라
+    # 새 dict 를 만들어 돌려주기 때문에, 여기 안 적으면 저장할 때마다
+    # 사라진다. 실제로 노래방에 들어가 놓고 한 마디 하면 곧바로
+    # 아무 자리도 아닌 것이 되어 다시는 노래를 못 불렀다.
+    scene = data.get("scene", {})
+
+    if not isinstance(scene, dict):
+        scene = {}
+
     if not isinstance(conversation, list):
         conversation = []
 
@@ -279,6 +290,7 @@ def load_memory_data():
         "rps": game_rps,
         "place": place,
         "wearing": wearing,
+        "scene": scene,
         "word_chain": chain,
         "gomoku": stones,
         "halli": bells,

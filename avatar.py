@@ -2316,6 +2316,240 @@ class VirtualAvatar:
 
         return lines
 
+    # --------------------------------------------------------
+    # 장면 — 지금이 어떤 자리인가
+    #
+    # 장소·옷과 같은 얼개다. 다른 것은 하나뿐이다:
+    # **열려 있을 때만 프롬프트에 적힌다.**
+    #
+    # 옷장은 늘 적힌다 — 언제든 갈아입을 수 있으니까. 노래는
+    # 아니다. 밥 먹다가 갑자기 노래를 부르지는 않는다. 그래서
+    # 그 자리에 갔을 때만 할 수 있는 것이 는다.
+    # --------------------------------------------------------
+
+    def scenes_conf(self):
+        return (self.model or {}).get("scenes", {})
+
+    def scenes(self):
+        if not self.scenes_conf().get("enabled", True):
+            return []
+        return self.scenes_conf().get("list", []) or []
+
+    def scene(self, key):
+        """열쇠로 장면 하나를 꺼낸다. 없으면 None."""
+        for s in self.scenes():
+            if s.get("key") == key:
+                return s
+        return None
+
+    def scene_of_place(self, place):
+        """그 곳이 곧 어떤 장면인가. 아니면 None.
+
+        노래방 배경으로 옮기면 노래방이 열린다. 표시를 두 번
+        적게 하지 않는다 — (배경: 노래방) 하나면 된다.
+        """
+        if not place:
+            return None
+
+        want = str(place).replace(" ", "")
+
+        for s in self.scenes():
+            for p in s.get("places", []):
+                if str(p).replace(" ", "") == want:
+                    return s
+        return None
+
+    def scene_of_words(self, text):
+        """상대의 말에서 장면을 알아챈다. 아니면 None.
+
+        **이것이 '상황 인지' 의 알맹이다.** "노래방 왔어" 라는 말
+        한마디에 다이아가 할 수 있는 일이 달라져야 한다.
+
+        낱말로 찾는 것은 서버가 한다. 모델에게 "이런 말이 나오면
+        노래방인 줄 알아라" 라고 적으면 그게 규칙 한 줄이고,
+        그만큼 다이아가 쓸 자리가 줄어든다. [[dia-autonomy]]
+        """
+        if not text:
+            return None
+
+        low = str(text).lower().replace(" ", "")
+
+        for s in self.scenes():
+            for w in s.get("enter_words", []):
+                if str(w).replace(" ", "") in low:
+                    return s
+        return None
+
+    def scene_leaves(self, text):
+        """장면을 닫는 말인가."""
+        if not text:
+            return False
+
+        low = str(text).lower().replace(" ", "")
+
+        return any(str(w).replace(" ", "") in low
+                   for w in self.scenes_conf().get("leave_words", []))
+
+    def scene_note(self, scene):
+        """지금 어떤 자리인지 한 줄로. 없으면 None.
+
+        시간·기분·장소와 같은 자리다. 상황만 준다.
+        """
+        if not scene:
+            return None
+        return scene.get("note") or None
+
+    def scene_block(self, scene):
+        """이 자리에서만 할 수 있는 것. 없으면 None.
+
+        짧을수록 좋다. 두 줄이면 두 줄만 적는다.
+        """
+        if not scene:
+            return None
+
+        can = scene.get("can") or []
+
+        if not can:
+            return None
+
+        return "[여기서 할 수 있는 것]\n" + "\n".join(can)
+
+    def shot_conf(self):
+        """네컷 찍는 규칙. 없으면 빈 것."""
+        for s in self.scenes():
+            if s.get("shot"):
+                return s["shot"]
+        return {}
+
+    def is_shoot(self, text):
+        """(찍자) 인가. 괄호 안쪽만 받는다.
+
+        찍는 순서·컷 수·카운트는 프롬프트에 안 적는다. 서버가 쥔다 —
+        놀이 규칙과 같은 자리다. 다이아는 '찍자' 고 말할 뿐이다.
+        """
+        low = str(text or "").strip().lower().replace(" ", "")
+
+        if not low:
+            return False
+
+        return any(str(w).replace(" ", "") == low
+                   for w in self.shot_conf().get("words", []))
+
+    # --------------------------------------------------------
+    # 노래
+    #
+    # 가사는 다이아가 짓고 음은 서버가 붙인다.
+    # --------------------------------------------------------
+
+    def song_conf(self):
+        return (self.model or {}).get("song", {})
+
+    def song_marker(self, text):
+        """(노래: 가사) 에서 가사를 꺼낸다. 표시가 아니면 None.
+
+        괄호는 이미 떼고 안쪽만 받는다. 장소·옷과 똑같다.
+        """
+        low = str(text or "").strip()
+
+        for head in self.song_conf().get("markers", []):
+            if low.startswith(head):
+                return low[len(head):].strip() or None
+
+        # 조금 너그럽게 읽는다.
+        #
+        # 실제로 모델이 (노어: …) 라고 오타를 냈고, 그 줄은 노래가
+        # 아니라 글이 되어 화면에 그대로 남았다. 콜론 앞이 짧고 그 안에
+        # '노래' 나 '가사' 가 들어 있으면 부르려던 것으로 본다.
+        for sep in (":", "："):
+            if sep not in low:
+                continue
+
+            head, rest = low.split(sep, 1)
+
+            if len(head) <= 5 and any(w in head for w in ("노래", "가사", "노랫")):
+                return rest.strip() or None
+
+        return None
+
+    @staticmethod
+    def syllables(text):
+        """부를 수 있는 글자 수. 한글만 센다.
+
+        쉼표·물음표·영문은 소리가 없다. 음을 그만큼 잡아 두면
+        노래 중간이 비어 버린다.
+        """
+        return sum(1 for ch in str(text or "")
+                   if 0xAC00 <= ord(ch) <= 0xD7A3)
+
+    def melody(self, key=None):
+        """멜로디 하나. 열쇠를 안 주면 그때그때 하나 고른다."""
+        mels = self.song_conf().get("melodies", []) or []
+
+        if not mels:
+            return None
+
+        if key:
+            for m in mels:
+                if m.get("key") == key:
+                    return m
+
+        import random
+        return random.choice(mels)
+
+    def score(self, lines, melody=None):
+        """가사 줄들에 음을 붙여 악보를 만든다.
+
+        멜로디를 줄마다 처음부터 다시 쓰지 않는다. **이어서 쓴다** —
+        그래야 두 줄이 한 노래로 들린다. 끝까지 쓰면 처음으로 돈다.
+
+        줄의 마지막 음은 길게 끈다. 사람은 숨을 쉬려고 거기서
+        늘어지고, 그 늘어짐이 '한 줄이 끝났다' 는 표다.
+        """
+        mel = melody or self.melody()
+
+        if not mel or not lines:
+            return None
+
+        notes = mel.get("notes") or []
+
+        if not notes:
+            return None
+
+        out = []
+        cur = 0
+
+        for text in lines:
+            n = self.syllables(text)
+
+            if n <= 0:
+                continue
+
+            got = []
+
+            for i in range(n):
+                midi, beats = notes[(cur + i) % len(notes)]
+                got.append({"midi": midi, "beats": beats})
+
+            cur = (cur + n) % len(notes)
+
+            # 줄 끝은 끈다
+            if got:
+                got[-1] = dict(got[-1])
+                got[-1]["beats"] = max(got[-1]["beats"], 2)
+
+            out.append({"text": text, "notes": got})
+
+        if not out:
+            return None
+
+        return {
+            "bpm": mel.get("bpm", 92),
+            "melody": mel.get("key"),
+            "voice": self.song_conf().get("voice", {}),
+            "motion": self.song_conf().get("motion", "sing"),
+            "lines": out,
+        }
+
     def time_note(self, now=None, last_talk=None):
         """지금이 언제이고 얼마 만인지를 한 줄로. 적을 것이 없으면 None.
 
@@ -3285,6 +3519,189 @@ DIA = VirtualAvatar(
             "markers": ["옷:", "옷 :", "갈아입기:", "갈아입다:", "입기:"],
             # 벗는 것도 말로 된다
             "off_words": ["벗기", "벗는다", "벗음", "없음", "맨몸"],
+        },
+
+        # ----------------------------------------------------
+        # 장면 — 지금이 어떤 자리인가
+        #
+        # 장소가 '어디에 있는가' 라면 장면은 '무엇을 하는 자리인가' 다.
+        # 노래방에 있다는 것은 배경이 노래방이라는 뜻만이 아니라,
+        # **노래를 부를 수 있다**는 뜻이다.
+        #
+        # 그래서 장면은 곳 이름이 아니라 **할 수 있는 것**을 들고 있다.
+        # 열려 있는 동안에만 그 몇 줄이 프롬프트에 붙는다. 평소에는
+        # 한 자도 안 붙는다 — 기능이 늘어도 페르소나가 안 깎인다.
+        # [[dia-autonomy]]
+        #
+        # 여는 길은 셋이다. 어느 쪽이든 '알아챘다' 는 같은 뜻이다.
+        #
+        #   1. 그 곳으로 갔다        (배경: 노래방)
+        #   2. 상대가 그 말을 했다   "노래방 왔어"
+        #   3. 다이아가 먼저 꺼냈다  (배경: 노래방)
+        #
+        # **배경 그림이 없어도 열린다.** 그림은 있으면 같이 바뀔 뿐이다.
+        # 노래방 사진이 없다고 노래를 못 부를 이유는 없다.
+        # ----------------------------------------------------
+
+        "scenes": {
+            "enabled": True,
+
+            # 장면을 닫는 말. 어느 장면에서나 같다.
+            "leave_words": ["그만하자", "그만 하자", "나가자", "이제 그만",
+                            "끝내자", "다 했어", "그만할래", "나가", "됐어 그만"],
+
+            "list": [
+                {
+                    "key": "karaoke",
+                    "label": "노래방",
+
+                    # 이 곳에 있으면 저절로 열린다. 배경 파일 이름과
+                    # 같으면 된다.
+                    "places": ["노래방", "노래방_밤"],
+
+                    # 상대가 이런 말을 하면 곳과 상관없이 열린다.
+                    # 공원에서도 노래는 부를 수 있다.
+                    "enter_words": ["노래방", "노래 부르", "노래불러",
+                                    "노래해", "노래 해", "한 곡", "한곡",
+                                    "노래 들려", "노래 시작"],
+
+                    # 상황만 준다. 무슨 말을 하라고는 적지 않는다.
+                    "note": "노래방이다. 마이크는 네 손에 있다.",
+
+                    # 여기서만 할 수 있는 것.
+                    "can": [
+                        "(노래: 가사 한 줄) 이라고 적으면 그 줄을 실제로 부른다.",
+                        "여러 줄이면 여러 번 적는다. 가사는 네가 짓는다.",
+                        # 장소에서 통한 한 줄이다. 이게 없으면
+                        # (노래를 부른다) 처럼 적고 소리는 안 난다.
+                        "노래하는 시늉을 글로만 쓰면 소리가 안 난다.",
+                    ],
+                },
+                {
+                    "key": "photo",
+                    "label": "인생네컷",
+                    "places": ["사진부스", "포토부스", "인생네컷"],
+                    "enter_words": ["인생네컷", "인생 네컷", "네컷", "네 컷",
+                                    "사진 찍", "사진찍", "포토부스", "사진부스",
+                                    "같이 찍"],
+                    "note": "인생네컷을 찍는 자리다. 카메라가 바로 앞에 있다.",
+                    "can": [
+                        "(찍자) 라고 적으면 카메라 앞으로 가서 네 컷을 찍는다.",
+                    ],
+
+                    # 찍는 동안 서버가 쥐는 것. 틀리면 안 되는 것은
+                    # 프롬프트에 안 적는다 — 놀이와 같은 자리다.
+                    "shot": {
+                        # 이렇게 적으면 찍는다
+                        "words": ["찍자", "찍기", "찍는다", "촬영", "사진 찍자",
+                                  "사진찍자", "네컷 찍자", "찍어보자", "찍어 보자"],
+                        "cuts": 4,
+                        # 찍는 동안의 화각. 평소(30도)로 코앞까지
+                        # 다가오면 넉 장이 전부 얼굴이 된다.
+                        "fov": 42,
+                        "count_from": 3,          # 셋 · 둘 · 하나
+                        "count_ms": 700,
+                        "flash_ms": 260,
+                        "hold_ms": 900,           # 포즈를 잡고 멈춰 있는 시간
+                        # 카메라 앞으로 얼마나 오는가 (미터)
+                        "step_in": 0.42,
+                        # 컷마다 거리를 조금씩 바꾼다. 네 장이 다 같은
+                        # 크기면 네컷이 아니라 같은 사진 네 장이다.
+                        "zoom": [0.0, -0.18, 0.12, -0.28],
+                        "poses": [
+                            {"motion": "pose_v", "face": "fun"},
+                            {"motion": "pose_vv", "face": "joy"},
+                            {"motion": "pose_cheek", "face": "fun"},
+                            {"motion": "pose_wink", "face": "wink"},
+                        ],
+                    },
+                },
+            ],
+        },
+
+        # ----------------------------------------------------
+        # 노래
+        #
+        # 말하는 목소리(TTS)는 음정을 얹을 수 없다. 그래서 노래는
+        # 화면이 소리를 처음부터 만든다(static/singer.js).
+        #
+        # **멜로디는 서버가 쥔다.** 모델에게 음을 적게 하면 음치가
+        # 되고, 적으라는 말 자체가 규칙 한 줄이다. 가사만 받는다.
+        #
+        # 음은 미디 번호다. 60 이 가운데 도. 여기 적힌 범위(67~79)는
+        # 여자 목소리가 편히 내는 자리다.
+        # ----------------------------------------------------
+
+        "song": {
+            "enabled": True,
+            "markers": ["노래:", "노래 :", "♪", "노래하기:", "부르기:"],
+
+            # 한 답변에서 부르는 줄 수의 상한. 열 줄을 부르면
+            # 대화가 아니라 공연이 된다.
+            "max_lines": 6,
+
+            # 부르는 동안 짓는 몸짓
+            "motion": "sing",
+
+            "melodies": [
+                {
+                    "key": "bright",
+                    "label": "밝게",
+                    "bpm": 96,
+                    "notes": [
+                        [72, 1], [72, 1], [74, 1], [76, 1],
+                        [76, 1], [74, 1], [72, 1], [71, 1],
+                        [69, 1], [71, 1], [72, 1], [74, 1],
+                        [72, 1], [71, 1], [69, 1], [67, 2],
+                    ],
+                },
+                {
+                    "key": "calm",
+                    "label": "잔잔히",
+                    "bpm": 76,
+                    "notes": [
+                        [69, 1], [71, 1], [72, 2],
+                        [71, 1], [69, 1], [67, 2],
+                        [69, 1], [71, 1], [72, 1], [74, 1],
+                        [72, 2], [69, 2],
+                    ],
+                },
+                {
+                    "key": "cheer",
+                    "label": "신나게",
+                    "bpm": 128,
+                    "notes": [
+                        [76, 0.5], [76, 0.5], [74, 1], [72, 1],
+                        [74, 0.5], [76, 0.5], [79, 1], [76, 1],
+                        [74, 0.5], [72, 0.5], [71, 1], [72, 1],
+                        [74, 1], [72, 2],
+                    ],
+                },
+                {
+                    "key": "sweet",
+                    "label": "달콤하게",
+                    "bpm": 88,
+                    "notes": [
+                        [72, 1], [74, 1], [76, 1], [79, 2],
+                        [76, 1], [74, 1], [72, 1],
+                        [74, 1], [71, 1], [72, 2],
+                        [74, 1], [72, 1], [69, 1], [71, 1], [72, 2],
+                    ],
+                },
+            ],
+
+            # 목소리 음색. singer.js 가 그대로 받는다.
+            #
+            # 세 가지를 뽑아 듣고 고른 값이다.
+            "voice": {
+                "wave": "sawtooth",
+                "q1": 9, "q2": 11, "q3": 13,
+                "breath": 0.05,
+                "vibHz": 5.5,
+                "vibCent": 28,
+                "gain": 0.5,
+                "reverb": 0.24,
+            },
         },
         # 몸/옷 겹치기.
         #
@@ -4889,6 +5306,313 @@ DIA = VirtualAvatar(
                 {"t": 2.2, "bones": {
                     "leftShoulder": [0, 0, 0], "leftUpperArm": [0, 0, 68.75],
                     "leftLowerArm": [0, 0, 10], "leftHand": [0, 0, 0],
+                    "head": [0, 0, 0], "chest": [0, 0, 0]}},
+            ],
+        ),
+
+        # ----------------------------------------------------
+        # 노래
+        #
+        # 팔 각도는 눈대중이 아니라 **찾아낸 값**이다. 주먹이 입보다
+        # 한 뼘 아래·앞(머리뼈에서 -21.5cm, +10.5cm)에 오도록 어깨·위팔·
+        # 아래팔을 훑어 맞췄다. 남은 거리 1.5cm.
+        #
+        # 마이크는 10cm 짜리라 주먹이 입에 닿을 필요가 없다. 주먹을
+        # 입에 붙이면 얼굴을 가린다.
+        #
+        # **관절 한계를 안 걸면 반드시 벗어난다.** 한 번은 쇄골을 55도
+        # 돌리고 위팔을 한계까지 젖혀 거리 0 을 만들었다. 숫자는 맞는데
+        # 사람 몸이 아니었다. 쇄골 ±12 · 위팔 앞뒤 ±25 · 팔꿈치 135 까지.
+        #
+        # 손가락은 주먹(바위)보다 덜 쥔다 — 마이크 굵기만큼 남긴다.
+        #
+        # 몸은 박자에 맞춰 흔든다. 노래는 서 있는 것이 아니다.
+        # 흔드는 것은 **몸통**이고 마이크 든 팔은 가만히 둔다 —
+        # 팔까지 흔들면 마이크가 입에서 떨어진다.
+        # ----------------------------------------------------
+
+        Motion(
+            key="sing",
+            label="노래",
+            description="마이크를 잡고 박자에 맞춰 몸을 흔든다",
+            duration=1.6,
+            loop=True,
+            keys=[
+                {"t": 0.0, "bones": {
+                    "rightShoulder": [0, 0, -11.94],
+                    "rightUpperArm": [25, 43.81, -49.19],
+                    "rightLowerArm": [0, 135, 14.69],
+                    "rightHand": [20, 0, 0],
+                    "rightIndexProximal": [0, 0, -56], "rightIndexIntermediate": [0, 0, -66], "rightIndexDistal": [0, 0, -40],
+                    "rightMiddleProximal": [0, 0, -58], "rightMiddleIntermediate": [0, 0, -68], "rightMiddleDistal": [0, 0, -42],
+                    "rightRingProximal": [0, 0, -58], "rightRingIntermediate": [0, 0, -66], "rightRingDistal": [0, 0, -42],
+                    "rightLittleProximal": [0, 0, -56], "rightLittleIntermediate": [0, 0, -64], "rightLittleDistal": [0, 0, -40],
+                    "rightThumbProximal": [-22, 0, 0], "rightThumbIntermediate": [-25, -51.25, -57], "rightThumbDistal": [0, -83.5, 0],
+                    "leftShoulder": [0, 0, 0], "leftUpperArm": [0, 0, 63],
+                    "leftLowerArm": [0, -14, 0],
+                    "spine": [0, 0, 3], "chest": [0, 0, 2], "head": [-2, -4, -3]}},
+                {"t": 0.4, "bones": {
+                    "rightShoulder": [0, 0, -11.94],
+                    "rightUpperArm": [25, 43.81, -49.19],
+                    "rightLowerArm": [0, 135, 14.69],
+                    "rightHand": [20, 0, 0],
+                    "rightIndexProximal": [0, 0, -56], "rightIndexIntermediate": [0, 0, -66], "rightIndexDistal": [0, 0, -40],
+                    "rightMiddleProximal": [0, 0, -58], "rightMiddleIntermediate": [0, 0, -68], "rightMiddleDistal": [0, 0, -42],
+                    "rightRingProximal": [0, 0, -58], "rightRingIntermediate": [0, 0, -66], "rightRingDistal": [0, 0, -42],
+                    "rightLittleProximal": [0, 0, -56], "rightLittleIntermediate": [0, 0, -64], "rightLittleDistal": [0, 0, -40],
+                    "rightThumbProximal": [-22, 0, 0], "rightThumbIntermediate": [-25, -51.25, -57], "rightThumbDistal": [0, -83.5, 0],
+                    "leftShoulder": [0, 0, 0], "leftUpperArm": [0, 0, 58],
+                    "leftLowerArm": [0, -22, 0],
+                    "spine": [0, 0, -3], "chest": [0, 0, -2], "head": [-4, 4, 3]}},
+                {"t": 0.8, "bones": {
+                    "rightShoulder": [0, 0, -11.94],
+                    "rightUpperArm": [25, 43.81, -49.19],
+                    "rightLowerArm": [0, 135, 14.69],
+                    "rightHand": [20, 0, 0],
+                    "rightIndexProximal": [0, 0, -56], "rightIndexIntermediate": [0, 0, -66], "rightIndexDistal": [0, 0, -40],
+                    "rightMiddleProximal": [0, 0, -58], "rightMiddleIntermediate": [0, 0, -68], "rightMiddleDistal": [0, 0, -42],
+                    "rightRingProximal": [0, 0, -58], "rightRingIntermediate": [0, 0, -66], "rightRingDistal": [0, 0, -42],
+                    "rightLittleProximal": [0, 0, -56], "rightLittleIntermediate": [0, 0, -64], "rightLittleDistal": [0, 0, -40],
+                    "rightThumbProximal": [-22, 0, 0], "rightThumbIntermediate": [-25, -51.25, -57], "rightThumbDistal": [0, -83.5, 0],
+                    "leftShoulder": [0, 0, 0], "leftUpperArm": [0, 0, 63],
+                    "leftLowerArm": [0, -14, 0],
+                    "spine": [0, 0, 3], "chest": [0, 0, 2], "head": [-2, -4, -3]}},
+                {"t": 1.2, "bones": {
+                    "rightShoulder": [0, 0, -11.94],
+                    "rightUpperArm": [25, 43.81, -49.19],
+                    "rightLowerArm": [0, 135, 14.69],
+                    "rightHand": [20, 0, 0],
+                    "rightIndexProximal": [0, 0, -56], "rightIndexIntermediate": [0, 0, -66], "rightIndexDistal": [0, 0, -40],
+                    "rightMiddleProximal": [0, 0, -58], "rightMiddleIntermediate": [0, 0, -68], "rightMiddleDistal": [0, 0, -42],
+                    "rightRingProximal": [0, 0, -58], "rightRingIntermediate": [0, 0, -66], "rightRingDistal": [0, 0, -42],
+                    "rightLittleProximal": [0, 0, -56], "rightLittleIntermediate": [0, 0, -64], "rightLittleDistal": [0, 0, -40],
+                    "rightThumbProximal": [-22, 0, 0], "rightThumbIntermediate": [-25, -51.25, -57], "rightThumbDistal": [0, -83.5, 0],
+                    "leftShoulder": [0, 0, 0], "leftUpperArm": [0, 0, 58],
+                    "leftLowerArm": [0, -22, 0],
+                    "spine": [0, 0, -3], "chest": [0, 0, -2], "head": [-4, 4, 3]}},
+                {"t": 1.6, "bones": {
+                    "rightShoulder": [0, 0, -11.94],
+                    "rightUpperArm": [25, 43.81, -49.19],
+                    "rightLowerArm": [0, 135, 14.69],
+                    "rightHand": [20, 0, 0],
+                    "rightIndexProximal": [0, 0, -56], "rightIndexIntermediate": [0, 0, -66], "rightIndexDistal": [0, 0, -40],
+                    "rightMiddleProximal": [0, 0, -58], "rightMiddleIntermediate": [0, 0, -68], "rightMiddleDistal": [0, 0, -42],
+                    "rightRingProximal": [0, 0, -58], "rightRingIntermediate": [0, 0, -66], "rightRingDistal": [0, 0, -42],
+                    "rightLittleProximal": [0, 0, -56], "rightLittleIntermediate": [0, 0, -64], "rightLittleDistal": [0, 0, -40],
+                    "rightThumbProximal": [-22, 0, 0], "rightThumbIntermediate": [-25, -51.25, -57], "rightThumbDistal": [0, -83.5, 0],
+                    "leftShoulder": [0, 0, 0], "leftUpperArm": [0, 0, 63],
+                    "leftLowerArm": [0, -14, 0],
+                    "spine": [0, 0, 3], "chest": [0, 0, 2], "head": [-2, -4, -3]}},
+            ],
+        ),
+
+        # ----------------------------------------------------
+        # 사진 포즈 넷
+        #
+        # 네컷은 넉 장이 서로 달라야 네컷이다. 같은 얼굴 네 번이면
+        # 그냥 사진 네 장이다.
+        #
+        # 손 모양은 가위바위보에서 이미 맞춰 둔 것을 그대로 쓴다.
+        # 손가락 각도를 새로 눈대중하면 반드시 틀린다.
+        #
+        # 포즈는 잡고 **머물러야** 찍힌다. 그래서 hold_t 로 한가운데를
+        # 세우고, 찍는 쪽이 그 자리에서 셔터를 누른다.
+        # ----------------------------------------------------
+
+        Motion(
+            key="pose_v",
+            label="브이",
+            description="얼굴 옆으로 손을 들어 브이를 그린다",
+            duration=1.5,
+            loop=False,
+            hold_t=0.6,
+            expression="fun",
+            keys=[
+                {"t": 0.0, "bones": {
+                    "rightShoulder": [0, 0, 0], "rightUpperArm": [0, 0, -68.75],
+                    "rightLowerArm": [0, 0, -10], "rightHand": [0, 0, 0],
+                    "head": [0, 0, 0], "chest": [0, 0, 0]}},
+                {"t": 0.6, "bones": {
+                    "rightShoulder": [0, 0, -8],
+                    "rightUpperArm": [0, 0, -12], "rightLowerArm": [0, 0, 128],
+                    "rightHand": [88, 0, 0],
+                    "rightIndexProximal": [0.0, 16.0, 0.0],
+                    "rightIndexIntermediate": [0.0, 0.0, 0.0],
+                    "rightIndexDistal": [0.0, 0.0, 0.0],
+                    "rightMiddleProximal": [0.0, -12.0, 0.0],
+                    "rightMiddleIntermediate": [0.0, 0.0, 0.0],
+                    "rightMiddleDistal": [0.0, 0.0, 0.0],
+                    "rightRingProximal": [0.0, 0.0, -78.0],
+                    "rightRingIntermediate": [0.0, 0.0, -92.0],
+                    "rightRingDistal": [0.0, 0.0, -62.0],
+                    "rightLittleProximal": [0.0, 0.0, -78.0],
+                    "rightLittleIntermediate": [0.0, 0.0, -92.0],
+                    "rightLittleDistal": [0.0, 0.0, -62.0],
+                    "rightThumbProximal": [-22.0, 0.0, 0.0],
+                    "rightThumbIntermediate": [-25.0, -51.25, -57.0],
+                    "rightThumbDistal": [0.0, -83.5, 0.0],
+                    "head": [-2, 0, -8], "chest": [0, 0, -3]}},
+                {"t": 1.5, "bones": {
+                    "rightShoulder": [0, 0, 0], "rightUpperArm": [0, 0, -68.75],
+                    "rightLowerArm": [0, 0, -10], "rightHand": [0, 0, 0],
+                    "head": [0, 0, 0], "chest": [0, 0, 0]}},
+            ],
+        ),
+
+        # 더블 브이.
+        #
+        # 처음에는 **머리 위로 큰 하트**를 그리려 했다. 두 손끝이
+        # 만나는 값을 찾아봤더니(_fit_heart.py) 이 뼈대로는 안 된다 —
+        # 손끝을 6cm 까지 붙이면 두 손이 정수리에서 63cm 내려와
+        # 가슴 앞에서 만나고, 정수리 위에 두면 27cm 벌어져 만세가 된다.
+        # 어깨 너비와 팔 길이가 정해져 있으니 둘 다는 안 된다.
+        #
+        # 그다음엔 **한 손 하트**(엄지와 검지를 맞물린)를 넣었는데,
+        # 찍어 보니 이 거리에서는 그냥 주먹으로 읽혔다. 고리가
+        # 손 실루엣에 묻힌다.
+        #
+        # 그래서 브이를 양손으로 한다. 네컷에서 제일 잘 읽히는 자세다.
+        # 왼팔은 **x 그대로, y·z 부호 반전** — 이 아바타에서 좌우 대칭이
+        # 맞는 규칙이다(제스처 조정대에서 실측으로 확인한 것).
+        Motion(
+            key="pose_vv",
+            label="더블 브이",
+            description="두 손으로 브이를 만들어 얼굴 양옆에 든다",
+            duration=1.6,
+            loop=False,
+            hold_t=0.65,
+            expression="joy",
+            keys=[
+                {"t": 0.0, "bones": {
+                    "rightShoulder": [0, 0, 0], "rightUpperArm": [0, 0, -68.75],
+                    "rightLowerArm": [0, 0, -10], "rightHand": [0, 0, 0],
+                    "leftShoulder": [0, 0, 0], "leftUpperArm": [0, 0, 68.75],
+                    "leftLowerArm": [0, 0, 10], "leftHand": [0, 0, 0],
+                    "head": [0, 0, 0], "chest": [0, 0, 0]}},
+                {"t": 0.65, "bones": {
+                    "rightShoulder": [0, 0, -8],
+                    "rightUpperArm": [0, 0, -12], "rightLowerArm": [0, 0, 128],
+                    "rightHand": [88, 0, 0],
+                    "rightIndexProximal": [0.0, 16.0, 0.0],
+                    "rightIndexIntermediate": [0.0, 0.0, 0.0],
+                    "rightIndexDistal": [0.0, 0.0, 0.0],
+                    "rightMiddleProximal": [0.0, -12.0, 0.0],
+                    "rightMiddleIntermediate": [0.0, 0.0, 0.0],
+                    "rightMiddleDistal": [0.0, 0.0, 0.0],
+                    "rightRingProximal": [0.0, 0.0, -78.0],
+                    "rightRingIntermediate": [0.0, 0.0, -92.0],
+                    "rightRingDistal": [0.0, 0.0, -62.0],
+                    "rightLittleProximal": [0.0, 0.0, -78.0],
+                    "rightLittleIntermediate": [0.0, 0.0, -92.0],
+                    "rightLittleDistal": [0.0, 0.0, -62.0],
+                    "rightThumbProximal": [-22.0, 0.0, 0.0],
+                    "rightThumbIntermediate": [-25.0, -51.25, -57.0],
+                    "rightThumbDistal": [0.0, -83.5, 0.0],
+
+                    "leftShoulder": [0, 0, 8],
+                    "leftUpperArm": [0, 0, 12], "leftLowerArm": [0, 0, -128],
+                    "leftHand": [88, 0, 0],
+                    "leftIndexProximal": [0.0, -16.0, 0.0],
+                    "leftIndexIntermediate": [0.0, 0.0, 0.0],
+                    "leftIndexDistal": [0.0, 0.0, 0.0],
+                    "leftMiddleProximal": [0.0, 12.0, 0.0],
+                    "leftMiddleIntermediate": [0.0, 0.0, 0.0],
+                    "leftMiddleDistal": [0.0, 0.0, 0.0],
+                    "leftRingProximal": [0.0, 0.0, 78.0],
+                    "leftRingIntermediate": [0.0, 0.0, 92.0],
+                    "leftRingDistal": [0.0, 0.0, 62.0],
+                    "leftLittleProximal": [0.0, 0.0, 78.0],
+                    "leftLittleIntermediate": [0.0, 0.0, 92.0],
+                    "leftLittleDistal": [0.0, 0.0, 62.0],
+                    "leftThumbProximal": [-22.0, 0.0, 0.0],
+                    "leftThumbIntermediate": [-25.0, 51.25, 57.0],
+                    "leftThumbDistal": [0.0, 83.5, 0.0],
+
+                    "head": [-3, 0, 0], "chest": [-2, 0, 0]}},
+                {"t": 1.6, "bones": {
+                    "rightShoulder": [0, 0, 0], "rightUpperArm": [0, 0, -68.75],
+                    "rightLowerArm": [0, 0, -10], "rightHand": [0, 0, 0],
+                    "leftShoulder": [0, 0, 0], "leftUpperArm": [0, 0, 68.75],
+                    "leftLowerArm": [0, 0, 10], "leftHand": [0, 0, 0],
+                    "head": [0, 0, 0], "chest": [0, 0, 0]}},
+            ],
+        ),
+
+        # 두 손을 볼 옆에.
+        #
+        # 얼굴 가리기(cover)의 팔을 그대로 쓰되 팔꿈치를 덜 접어
+        # 손이 볼 **옆**에 오게 했다. 얼굴을 덮으면 사진이 안 된다.
+        Motion(
+            key="pose_cheek",
+            label="볼에 손",
+            description="두 손을 볼 옆에 모으고 고개를 기울인다",
+            duration=1.6,
+            loop=False,
+            hold_t=0.65,
+            expression="fun",
+            keys=[
+                {"t": 0.0, "bones": {
+                    "leftShoulder": [0, 0, 0], "leftUpperArm": [0, 0, 68.75],
+                    "leftLowerArm": [0, 0, 10], "leftHand": [0, 0, 0],
+                    "rightShoulder": [0, 0, 0], "rightUpperArm": [0, 0, -68.75],
+                    "rightLowerArm": [0, 0, -10], "rightHand": [0, 0, 0],
+                    "head": [0, 0, 0]}},
+                {"t": 0.65, "bones": {
+                    "leftShoulder": [-1.31, 9.27, -9.65],
+                    "leftUpperArm": [52, 58, 74], "leftLowerArm": [-70, -104, 0],
+                    "leftHand": [62, 0, 0],
+                    "rightShoulder": [-1.31, -9.27, 9.65],
+                    "rightUpperArm": [52, -58, -74], "rightLowerArm": [-70, 104, 0],
+                    "rightHand": [62, 0, 0],
+                    "head": [-4, 0, -10], "chest": [0, 0, -3]}},
+                {"t": 1.6, "bones": {
+                    "leftShoulder": [0, 0, 0], "leftUpperArm": [0, 0, 68.75],
+                    "leftLowerArm": [0, 0, 10], "leftHand": [0, 0, 0],
+                    "rightShoulder": [0, 0, 0], "rightUpperArm": [0, 0, -68.75],
+                    "rightLowerArm": [0, 0, -10], "rightHand": [0, 0, 0],
+                    "head": [0, 0, 0]}},
+            ],
+        ),
+
+        # 윙크. 브이를 눈가로 가져온다.
+        #
+        # 얼굴은 wink 가 맡는다 — 표정 쪽에 이미 있다.
+        Motion(
+            key="pose_wink",
+            label="윙크",
+            description="눈가에 브이를 붙이고 한쪽 눈을 감는다",
+            duration=1.6,
+            loop=False,
+            hold_t=0.65,
+            expression="wink",
+            keys=[
+                {"t": 0.0, "bones": {
+                    "rightShoulder": [0, 0, 0], "rightUpperArm": [0, 0, -68.75],
+                    "rightLowerArm": [0, 0, -10], "rightHand": [0, 0, 0],
+                    "head": [0, 0, 0], "chest": [0, 0, 0]}},
+                {"t": 0.65, "bones": {
+                    "rightShoulder": [0, 0, -6],
+                    "rightUpperArm": [0, 0, -30], "rightLowerArm": [0, 0, 122],
+                    "rightHand": [84, 0, -16],
+                    "rightIndexProximal": [0.0, 16.0, 0.0],
+                    "rightIndexIntermediate": [0.0, 0.0, 0.0],
+                    "rightIndexDistal": [0.0, 0.0, 0.0],
+                    "rightMiddleProximal": [0.0, -12.0, 0.0],
+                    "rightMiddleIntermediate": [0.0, 0.0, 0.0],
+                    "rightMiddleDistal": [0.0, 0.0, 0.0],
+                    "rightRingProximal": [0.0, 0.0, -78.0],
+                    "rightRingIntermediate": [0.0, 0.0, -92.0],
+                    "rightRingDistal": [0.0, 0.0, -62.0],
+                    "rightLittleProximal": [0.0, 0.0, -78.0],
+                    "rightLittleIntermediate": [0.0, 0.0, -92.0],
+                    "rightLittleDistal": [0.0, 0.0, -62.0],
+                    "rightThumbProximal": [-22.0, 0.0, 0.0],
+                    "rightThumbIntermediate": [-25.0, -51.25, -57.0],
+                    "rightThumbDistal": [0.0, -83.5, 0.0],
+                    "head": [-3, 0, 7], "chest": [0, 0, 3]}},
+                {"t": 1.6, "bones": {
+                    "rightShoulder": [0, 0, 0], "rightUpperArm": [0, 0, -68.75],
+                    "rightLowerArm": [0, 0, -10], "rightHand": [0, 0, 0],
                     "head": [0, 0, 0], "chest": [0, 0, 0]}},
             ],
         ),
