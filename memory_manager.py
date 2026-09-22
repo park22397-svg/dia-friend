@@ -256,6 +256,15 @@ def load_memory_data():
     if not isinstance(wearing, dict):
         wearing = {}
 
+    # 지금 폰에서 무엇이 나오고 있는가(노래 제목·가수).
+    #
+    # 장소·옷·장면과 같은 함정이다 — 여기 안 적으면 저장할 때마다
+    # 사라져서, 한 마디 하는 사이에 무슨 노래였는지를 잊는다.
+    media = data.get("media", {})
+
+    if not isinstance(media, dict):
+        media = {}
+
     # 눈 색과 화장.
     #
     # **장소·옷·장면과 똑같은 함정에 걸린다.** 이 함수는 아는 항목만
@@ -301,6 +310,7 @@ def load_memory_data():
         "place": place,
         "wearing": wearing,
         "look": look,
+        "media": media,
         "scene": scene,
         "word_chain": chain,
         "gomoku": stones,
@@ -346,6 +356,35 @@ def save_wearing(slot, key):
     save_memory_data(data)
 
     return w
+
+
+def load_media():
+    """지금 폰에서 나오는 것. 없으면 빈 dict.
+
+    {"title": ..., "artist": ..., "app": ..., "playing": bool, "at": 시각}
+    """
+    m = load_memory_data().get("media", {})
+
+    return m if isinstance(m, dict) else {}
+
+
+def save_media(title, artist, app, playing):
+    """폰이 알려 온 것을 적어 둔다. 제목과 가수뿐이다 — 가사는 안 받는다."""
+    import time as _time
+
+    data = load_memory_data()
+
+    data["media"] = {
+        "title": str(title or "")[:120],
+        "artist": str(artist or "")[:80],
+        "app": str(app or "")[:60],
+        "playing": bool(playing),
+        "at": _time.time(),
+    }
+
+    save_memory_data(data)
+
+    return data["media"]
 
 
 def load_look():

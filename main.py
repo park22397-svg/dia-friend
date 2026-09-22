@@ -4092,6 +4092,49 @@ def rig_page():
     )
 
 
+@app.route("/api/nowplaying", methods=["POST"])
+def nowplaying_api():
+    """폰이 '지금 이게 나온다' 고 알려 온다.
+
+    받는 것은 **제목·가수·어느 앱·재생 중인지** 넷뿐이다. 가사는 받지
+    않는다 — 다이아는 제 말로 이야기한다.
+
+    알림 내용도 받지 않는다. 폰 앱이 미디어 세션(재생기가 내놓는
+    '지금 재생 중' 딱지)에서 그 넷만 꺼내 보낸다.
+    """
+
+    data = request.get_json(silent=True) or {}
+
+    saved = memory_manager.save_media(
+        data.get("title"),
+        data.get("artist"),
+        data.get("app"),
+        bool(data.get("playing")),
+    )
+
+    if saved.get("playing") and saved.get("title"):
+        print("[지금 나오는 것] %s - %s (%s)"
+              % (saved.get("title"), saved.get("artist") or "?",
+                 saved.get("app") or "?"))
+    else:
+        print("[지금 나오는 것] 멈춤")
+
+    return jsonify({"ok": True, "now": saved})
+
+
+@app.route("/api/nowplaying")
+def nowplaying_get_api():
+    """지금 무엇이 나오는 것으로 알고 있는가(확인용)."""
+
+    media = memory_manager.load_media()
+
+    return jsonify({
+        "ok": True,
+        "now": media,
+        "note": AVATAR.media_note(media),
+    })
+
+
 @app.route("/api/sprites")
 def sprites_api():
     """구워 둔 그림이 무엇이 있는가.

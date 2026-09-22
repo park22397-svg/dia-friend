@@ -1055,6 +1055,27 @@ def process_chat(user_text, seeing=None, cut_off=False, woke=False):
             "content": f"[입은 옷] {_wr}",
         })
 
+    # 지금 이 사람 폰에서 무엇이 나오고 있는가.
+    #
+    # 곳·옷과 같은 자리다. 옆에 떠 있는데 무슨 노래를 듣는지 모르면
+    # 그냥 그림이 하나 떠 있는 것이다. 제목과 가수만 알아도 말이 트인다.
+    #
+    # **제목과 가수뿐이다.** 가사는 없다 — 다이아는 제 말로 이야기한다.
+    # 아무것도 안 나오면 한 자도 안 붙는다.
+    try:
+        _media = memory_manager.load_media()
+    except Exception as e:
+        print(f"[지금 나오는 것 읽기 오류]: {e}")
+        _media = None
+
+    _mn = AVATAR.media_note(_media)
+
+    if _mn:
+        messages.append({
+            "role": "system",
+            "content": f"[지금 나오는 것] {_mn}",
+        })
+
     # 지금이 어떤 자리인가.
     #
     # 시간·곳·옷과 같은 자리에 같은 방식으로 넣는다. 다른 것은

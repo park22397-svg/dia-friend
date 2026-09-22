@@ -1447,6 +1447,50 @@
             cursor: not-allowed;
         }
 
+        /* 지난 이야기 펼치기 단추. 넓은 화면에서는 이야기 칸이 늘
+           보이므로 쓸 일이 없다. */
+        #log-toggle { display: none; }
+
+        /* ============================================================
+           비치는 모드 (?clear=1)
+
+           폰 앱에서 열 때 쓴다. 창 자체를 투명하게 두면 **폰 배경화면이
+           그대로 비쳐** 다이아가 그 위에 서 있는 것처럼 보인다.
+
+           칠하는 것을 다 걷어내야 한다 — 바탕색 한 겹만 남아도
+           뒤가 안 보인다. 바닥 원판과 장소 그림도 같이 끈다(화면 쪽에서).
+           단추와 입력칸만 살짝 어둡게 깔아 글씨가 읽히게 한다.
+           ============================================================ */
+        body.clear,
+        body.clear #avatar-container,
+        body.clear #chat-container,
+        body.clear #chat-header {
+            background: transparent;
+            background-image: none;
+        }
+
+        body.clear #chat-container { border-left: none; border-top: none; }
+
+        body.clear #chat-input-area {
+            background: rgba(14, 16, 32, 0.66);
+            border-radius: 14px 14px 0 0;
+        }
+
+        body.clear #chat-messages {
+            background: rgba(10, 12, 24, 0.62);
+            border-radius: 14px;
+        }
+
+        body.clear #chat-input,
+        body.clear #situation-input {
+            background: rgba(10, 12, 24, 0.72);
+        }
+
+        /* 비치는 동안에는 말풍선이 더 진해야 읽힌다 */
+        body.clear #speech-bubble {
+            background: rgba(255, 255, 255, 0.97);
+        }
+
         /* ============================================================
            좁은 화면 — 휴대폰
 
@@ -1483,12 +1527,44 @@
                 border-top: 1px solid #2a2a3a;
             }
 
-            #chat-header { padding: 10px 14px; font-size: 1rem; }
+            /* **좁은 화면에서는 다이아가 먼저다.**
+               이야기 칸과 이름표가 화면의 절반을 차지하고 있었는데,
+               정작 하고 싶은 것은 다이아를 보는 것이다. 감춰 두고
+               말은 말풍선으로 본다. 지난 이야기는 💬 로 펼친다. */
+            #chat-header { display: none; }
+            #chat-messages { display: none; }
 
-            /* 줄어드는 것은 **이야기 칸 하나뿐이다.** 입력칸이 줄면
-               화면 밖으로 밀려 안 보인다(실제로 그랬다). */
-            #chat-messages { padding: 12px; flex: 1; min-height: 0; }
+            body.showlog #chat-messages {
+                display: flex;
+                padding: 12px;
+                max-height: 46dvh;
+                flex: none;
+            }
+
+            #log-toggle {
+                display: block;
+                padding: 12px 14px;
+                border-radius: 8px;
+                border: 1px solid #333;
+                background: #0f0f17;
+                color: #dfe1f0;
+                font-size: 1rem;
+                cursor: pointer;
+            }
+
+            /* 다이아가 남는 자리를 다 쓴다 */
+            #avatar-container {
+                flex: 1;
+                height: auto;
+                min-height: 0;
+            }
+
+            #chat-container { flex: none; }
             #chat-input-area { padding: 10px 12px; flex-shrink: 0; }
+
+            /* 걷기 손잡이는 감춘다. 좁은 화면에서 자리만 먹고,
+               다이아는 스스로도 걸어 다닌다. */
+            #stick-pad, #stick-keys { display: none; }
 
             /* 말풍선은 **얼굴을 가리면 안 된다.**
                머리 옆에 붙이면 좁은 화면에서는 얼굴 위에 올라앉는다.
@@ -1782,6 +1858,10 @@
                 placeholder="메시지를 입력하세요..."
             >
 
+            <!-- 지난 이야기 펼치기. 좁은 화면에서만 보인다 —
+                 거기서는 이야기 칸을 감춰 두고 다이아에게 자리를 준다. -->
+            <button id="log-toggle" title="지난 이야기">💬</button>
+
             <button id="send-btn">
                 전송
             </button>
@@ -1798,6 +1878,21 @@
 
         const canvas = document.getElementById('canvas3d');
         const avatarContainer = document.getElementById('avatar-container');
+
+        // 비치는 모드.
+        //
+        // 폰 앱이 `?clear=1` 로 연다. 창 자체가 투명해서 **뒤에 있는
+        // 것이 그대로 비친다** — 유튜브를 보면서 다이아를 옆에 두는 자리다.
+        //
+        // 칠하는 것을 다 걷어야 한다. 바탕색 한 겹만 남아도 뒤가 안 보인다.
+        // 바닥 원판과 장소 그림은 아래에서 끈다.
+        // URLSearchParams 를 안 쓴다 — 검사기(_verify_screen)의 가짜
+        // 환경에는 없어서 거기서 스크립트가 멈춘다.
+        // 괄호를 안 쓴다 — `clear(` 라고 적으면 _verify_calls 가 함수
+        // 부름으로 읽어 '없는 것을 부른다' 고 잡는다.
+        const CLEAR = /[?&]clear\b/.test(String(location.search || ''));
+
+        if (CLEAR) document.body.classList.add('clear');
 
         const scene = new THREE.Scene();
 
@@ -1982,6 +2077,9 @@
         // 바닥이 두 겹으로 보인다. 발밑 그림자만 남긴다 —
         // 그건 다이아가 그 바닥에 닿아 있다는 표시라서 오히려 있어야 한다.
         function setFloorVisible(on) {
+            // 비치는 모드에서는 바닥도 깔지 않는다. 뒤가 보여야 한다.
+            if (CLEAR) on = false;
+
             floorParts.floor.visible = on;
             floorGrid.visible = on;
         }
@@ -3074,6 +3172,13 @@
         function paintBackground(img, fit, dim) {
             const box = document.getElementById('avatar-container');
             if (!box) return;
+
+            // 비치는 모드에서는 장소 그림을 안 깐다.
+            // 그림을 깔면 폰 화면이 그 뒤로 숨는다 — 비치라고 켠 모드다.
+            if (CLEAR) {
+                box.style.backgroundImage = '';
+                return;
+            }
 
             if (!img) {
                 box.style.backgroundImage = '';
@@ -8445,6 +8550,26 @@
             document.getElementById(
                 'send-btn'
             );
+
+        // 지난 이야기 펼치기/접기.
+        //
+        // 좁은 화면에서는 이야기 칸을 감춰 두고 다이아에게 자리를 준다.
+        // 말은 말풍선으로 보고, 지난 것을 훑고 싶을 때만 펼친다.
+        (function () {
+            const b = document.getElementById('log-toggle');
+
+            if (!b) return;
+
+            b.addEventListener('click', () => {
+                document.body.classList.toggle('showlog');
+
+                // 펼쳤으면 맨 아래(가장 최근)를 보여 준다
+                if (document.body.classList.contains('showlog')) {
+                    const box = document.getElementById('chat-messages');
+                    if (box) box.scrollTop = box.scrollHeight;
+                }
+            });
+        })();
 
        // ============================================================
         // 표정 이름

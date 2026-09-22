@@ -2399,6 +2399,62 @@ class VirtualAvatar:
             return None
         return scene.get("note") or None
 
+    def media_conf(self):
+        return (self.model or {}).get("media", {})
+
+    def media_note(self, media):
+        """지금 폰에서 무엇이 나오는지 한 줄로. 없으면 None.
+
+        장소·장면과 같은 자리다 — **상황만 준다.** 무슨 말을 하라고는
+        안 적는다. 제목과 가수만 알려 주고 나머지는 다이아가 정한다.
+
+        가사는 여기에도, 어디에도 없다. 제 말로 이야기하라는 뜻이다.
+        """
+        import time as _time
+
+        conf = self.media_conf()
+
+        if not conf.get("enabled", True) or not media:
+            return None
+
+        if not media.get("playing") or not media.get("title"):
+            return None
+
+        # 알려 온 지 한참 됐으면 그 노래는 이미 끝났다
+        fresh = float(conf.get("fresh_sec", 420))
+        at = float(media.get("at") or 0)
+
+        if at and (_time.time() - at) > fresh:
+            return None
+
+        title = str(media.get("title") or "").strip()
+        artist = str(media.get("artist") or "").strip()
+
+        who = " - " + artist if artist else ""
+
+        # 조사는 받침이 정한다. '어떤 곡 가 나온다' 로는 적을 수 없다.
+        tail = (title + who).strip()
+        last = tail[-1] if tail else ""
+
+        if "가" <= last <= "힣":
+            batchim = (ord(last) - 0xAC00) % 28 != 0
+        elif last.isalpha():
+            # 영어 제목은 끝소리로 가른다. 모음으로 끝나면 받침이 없다.
+            # (Nova -> '노바가', Sunset -> '선셋을')
+            batchim = last.lower() not in "aeiouy"
+        else:
+            batchim = False
+
+        where = (conf.get("apps") or {}).get(media.get("app") or "")
+
+        if where:
+            josa = "을" if batchim else "를"
+            return f"지금 이 사람이 {where}에서 '{tail}'{josa} 듣고 있다."
+
+        josa = "이" if batchim else "가"
+
+        return f"지금 이 사람 폰에서 '{tail}'{josa} 나오고 있다."
+
     def scene_block(self, scene):
         """이 자리에서만 할 수 있는 것. 없으면 None.
 
@@ -3737,6 +3793,41 @@ DIA = VirtualAvatar(
         # 음은 미디 번호다. 60 이 가운데 도. 여기 적힌 범위(67~79)는
         # 여자 목소리가 편히 내는 자리다.
         # ----------------------------------------------------
+
+        # ----------------------------------------------------
+        # 지금 폰에서 나오는 것
+        #
+        # 옆에 떠 있는데 내가 무슨 노래를 듣는지 모르면 그냥 그림이
+        # 하나 떠 있는 것이다. 제목과 가수만 알아도 말이 트인다.
+        #
+        # **받는 것은 제목·가수뿐이다.** 폰 앱이 미디어 세션에서 그
+        # 둘만 꺼내 보낸다. 가사는 받아 오지도, 서버에 두지도 않는다 —
+        # 다이아는 제 말로 이야기한다.
+        #
+        # 장소·장면과 같은 얼개다. **뭐라고 말하라고는 안 적는다.**
+        # 지금 무엇이 나오는지만 주고 나머지는 다이아가 정한다.
+        # 평소(아무것도 안 나올 때)에는 프롬프트가 한 자도 안 는다.
+        # ----------------------------------------------------
+        "media": {
+            "enabled": True,
+
+            # 알려 온 지 이만큼 지나면 잊는다. 노래는 끝나 있을 것이다.
+            "fresh_sec": 420,
+
+            # 앱 이름을 사람이 부르는 말로. 없으면 안 적는다 —
+            # com.google.android.youtube 라고 적을 수는 없다.
+            "apps": {
+                "com.google.android.youtube": "유튜브",
+                "com.google.android.apps.youtube.music": "유튜브 뮤직",
+                "com.spotify.music": "스포티파이",
+                "com.iloen.melon": "멜론",
+                "com.ktmusic.geniemusic": "지니",
+                "com.samsung.android.app.music.chn": "삼성 뮤직",
+                "com.sec.android.app.music": "삼성 뮤직",
+                "com.kakao.music": "카카오뮤직",
+                "com.neowiz.android.bugs": "벅스",
+            },
+        },
 
         "song": {
             "enabled": True,

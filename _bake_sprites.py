@@ -224,24 +224,36 @@ def save_png(data_url, path):
     return True
 
 
-def sheet(frames, size, path):
-    """낱장을 가로로 이어 붙인다. 안드로이드는 한 장을 끊어 쓰는 편이 싸다."""
+# 한 줄이 이만큼을 넘지 않게 접는다.
+#
+# 40칸을 가로로 이어 붙이면 10240px 이다. 안드로이드는 GPU 텍스처
+# 한계(흔히 4096)를 넘는 그림을 **조용히 안 그린다** — 오류도 없고
+# 화면에 아무것도 안 나온다. 찾기 어려운 자리라 미리 접어 둔다.
+SHEET_MAX = 2048
+
+
+def sheet(frames, w, h, path):
+    """낱장을 격자로 이어 붙인다. 몇 칸씩 끊었는지(cols)를 돌려준다."""
     try:
         from PIL import Image
     except ImportError:
         print("  (PIL 이 없어 시트는 안 만듭니다)")
-        return False
+        return 0
 
     if not frames:
-        return False
+        return 0
 
-    out = Image.new("RGBA", (size * len(frames), size), (0, 0, 0, 0))
+    cols = max(1, min(len(frames), SHEET_MAX // max(1, w)))
+    rows = (len(frames) + cols - 1) // cols
+
+    out = Image.new("RGBA", (w * cols, h * rows), (0, 0, 0, 0))
 
     for i, p in enumerate(frames):
-        out.paste(Image.open(p).convert("RGBA"), (i * size, 0))
+        out.paste(Image.open(p).convert("RGBA"),
+                  ((i % cols) * w, (i // cols) * h))
 
     out.save(path)
-    return True
+    return cols
 
 
 def main():
@@ -250,9 +262,12 @@ def main():
                     help="쉼표로. 비우면 기본 몇 개")
     ap.add_argument("--all", action="store_true", help="동작 전부")
     ap.add_argument("--fps", type=int, default=12)
-    ap.add_argument("--size", type=int, default=256)
+    ap.add_argument("--w", type=int, default=256, help="한 칸의 너비")
+    ap.add_argument("--h", type=int, default=420, help="한 칸의 높이")
     ap.add_argument("--chibi", type=float, default=1.0,
                     help="머리를 몇 배로. 1.4~1.6 이면 2등신 쪽")
+    ap.add_argument("--turns", default="0",
+                    help="몇 도에서 볼 것인가. 쉼표로. 예: 0,90,180")
     ap.add_argument("--code", default="", help="가입 암호(걸려 있으면)")
     args = ap.parse_args()
 
@@ -263,7 +278,7 @@ def main():
 
     os.makedirs(OUT, exist_ok=True)
 
-    br = Chrome(args.size, args.size)
+    br = Chrome(args.w, args.h)
 
     try:
         br.cookie(token)
@@ -288,7 +303,7 @@ def main():
             print("굽는 자리가 준비되지 않았습니다(아바타를 못 불렀을 수 있습니다).")
             return 1
 
-        br.js("bake.setSize(%d, %d)" % (args.size, args.size))
+        br.js("bake.setSize(%d, %d)" % (args.w, args.h))
 
         if abs(args.chibi - 1.0) > 0.001:
             br.js("bake.setChibi(%f)" % args.chibi)
@@ -321,10 +336,28 @@ def main():
             except Exception:
                 book = {"motions": {}}
 
-        book["size"] = args.size
+        book["w"] = args.w
+        book["h"] = args.h
+        book["size"] = args.w      # 옛 이름도 남겨 둔다
         book["fps"] = args.fps
         book["chibi"] = args.chibi
         book["made"] = time.strftime("%Y-%m-%d %H:%M")
+
+        turns = []
+
+        for piece in str(args.turns).split(","):
+            piece = piece.strip()
+
+            if not piece:
+                continue
+
+            try:
+                turns.append(int(float(piece)))
+            except ValueError:
+                pass
+
+        if not turns:
+            turns = [0]
 
         for key in want:
             m = by_key.get(key)
@@ -333,9 +366,6 @@ def main():
                 print("  없는 동작이라 건너뜁니다:", key)
                 continue
 
-            folder = os.path.join(OUT, key)
-            os.makedirs(folder, exist_ok=True)
-
             dur = float(m.get("duration") or 1.0)
             count = max(1, int(round(dur * args.fps)))
 
@@ -343,39 +373,54 @@ def main():
             # 안 빼면 넘길 때 한 칸 멈칫한다.
             step = dur / count if m.get("loop") else dur / max(1, count - 1)
 
-            paths = []
-            t0 = time.time()
+            for turn in turns:
+                # 0도는 이름을 안 붙인다. 앞모습이 기본이다.
+                name = key if turn == 0 else ("%s@%d" % (key, turn))
 
-            for i in range(count):
-                t = min(dur, i * step)
+                folder = os.path.join(OUT, name.replace("@", "_at_"))
+                os.makedirs(folder, exist_ok=True)
 
-                url = br.js("bake.frame('%s', %f)" % (key, t))
-                p = os.path.join(folder, "frame_%03d.png" % i)
+                br.js("bake.setTurn(%d)" % turn)
 
-                if save_png(url, p):
-                    paths.append(p)
+                paths = []
+                t0 = time.time()
 
-            made = sheet(paths, args.size, os.path.join(OUT, key + ".png"))
+                for i in range(count):
+                    t = min(dur, i * step)
 
-            book["motions"][key] = {
-                "label": m.get("label") or key,
-                "frames": len(paths),
-                "duration": dur,
-                "loop": bool(m.get("loop")),
-                "sheet": ("/static/sprites/%s.png" % key) if made else None,
-                "dir": "/static/sprites/%s/" % key,
-            }
+                    url = br.js("bake.frame('%s', %f)" % (key, t))
+                    p = os.path.join(folder, "frame_%03d.png" % i)
 
-            print("  %-10s %2d칸 · %.1f초 · %.1f초 걸림"
-                  % (key, len(paths), dur, time.time() - t0))
+                    if save_png(url, p):
+                        paths.append(p)
+
+                png = name.replace("@", "_at_") + ".png"
+
+                cols = sheet(paths, args.w, args.h, os.path.join(OUT, png))
+
+                book["motions"][name] = {
+                    "label": m.get("label") or key,
+                    "frames": len(paths),
+                    "duration": dur,
+                    "loop": bool(m.get("loop")),
+                    "turn": turn,
+                    "sheet": ("/static/sprites/%s" % png) if cols else None,
+                    "file": png,
+                    "cols": cols,
+                }
+
+                print("  %-14s %2d칸 · %3d도 · %.1f초 걸림"
+                      % (name, len(paths), turn, time.time() - t0))
+
+            br.js("bake.setTurn(0)")
 
         with open(os.path.join(OUT, "sprites.json"), "w", encoding="utf-8") as f:
             json.dump(book, f, ensure_ascii=False, indent=2)
 
         total = sum(v["frames"] for v in book["motions"].values())
         print()
-        print("구웠습니다: 동작 %d개, 그림 %d장, %dpx"
-              % (len(book["motions"]), total, args.size))
+        print("구웠습니다: 동작 %d개, 그림 %d장, %dx%d"
+              % (len(book["motions"]), total, args.w, args.h))
         print("  ", OUT)
 
         return 0
