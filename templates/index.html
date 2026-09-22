@@ -735,12 +735,34 @@
         #go-levels button.on { background: #4a3f77; border-color: #7a68b0; }
 
         /* 판. 15칸씩 열다섯 줄. 칸 하나가 22px 이라 판이 330px 이다.
-           체스(32px)보다 작게 잡았다 — 15줄이라 그대로 두면 화면을 덮는다. */
+           체스(32px)보다 작게 잡았다 — 15줄이라 그대로 두면 화면을 덮는다.
+
+           **돌은 선과 선이 만나는 자리에 놓인다.** 오목은 체스처럼 칸에
+           두는 놀이가 아니다. 처음에는 줄을 칸의 테두리로 그리고 돌을 칸
+           가운데에 뒀는데(누르기 쉬우라고), 그러면 돌이 선 사이 빈 칸에
+           떠 있어 오목판으로 안 보인다.
+
+           고친 방식: 줄을 **칸 한가운데**로 옮긴다. 칸 가운데가 곧 교점이
+           되므로, 돌 자리는 그대로 두고 눌리는 넓이도 22px 그대로다.
+           줄은 첫 칸 가운데에서 끝 칸 가운데까지만 긋는다 — 판 가장자리
+           바깥으로 삐져나가면 격자가 아니라 표가 된다. */
         #go-board {
             display: grid;
             grid-template-columns: repeat(15, 22px);
             grid-template-rows: repeat(15, 22px);
-            background: #c9a267;
+            background-color: #c9a267;
+
+            /* 22px 마다 한 줄. 11px(반 칸) 밀어 칸 가운데에 오게 하고,
+               폭을 21px 줄여 끝 칸 가운데에서 멈추게 한다. */
+            background-image:
+                repeating-linear-gradient(to right,
+                    rgba(74, 48, 16, 0.62) 0 1px, transparent 1px 22px),
+                repeating-linear-gradient(to bottom,
+                    rgba(74, 48, 16, 0.62) 0 1px, transparent 1px 22px);
+            background-position: 10.5px 10.5px;
+            background-size: calc(100% - 21px) calc(100% - 21px);
+            background-repeat: no-repeat;
+
             border: 1px solid #8a6b3f;
             border-radius: 4px;
         }
@@ -749,14 +771,19 @@
             position: relative;
             cursor: pointer;
         }
-        /* 줄은 칸의 테두리로 그린다. 바둑판은 선 위에 두지만
-           칸 가운데에 두어도 보기에는 같고 누르기는 훨씬 쉽다. */
-        .gsq::before {
+
+        /* 화점(별). 바둑판의 눈금 노릇을 한다 — 어디쯤인지 세지 않아도
+           보인다. 15줄 판에서는 천원과 네 귀 넷이다. */
+        .gsq.star::before {
             content: '';
             position: absolute;
-            inset: 0;
-            border-right: 1px solid rgba(90, 60, 20, 0.5);
-            border-bottom: 1px solid rgba(90, 60, 20, 0.5);
+            left: 50%;
+            top: 50%;
+            width: 5px;
+            height: 5px;
+            margin: -2.5px 0 0 -2.5px;
+            border-radius: 50%;
+            background: rgba(74, 48, 16, 0.78);
         }
         .gsq:hover::after {
             content: '';
@@ -10642,7 +10669,8 @@
 
         const hg = {
             on: false,
-            level: 'normal',
+            // 오목과 같은 까닭으로 비워 둔다 — 서버가 정한 세기를 쓴다
+            level: null,
             levels: [],
             busy: false,
             timer: null,      // 다이아가 칠 때를 기다리는 타이머
@@ -10829,7 +10857,10 @@
             open: false,
             last: null,      // 마지막에 놓인 자리
             busy: false,
-            level: 'normal',
+            // 세기는 **서버가 정한다.** 여기에 'normal' 을 적어 두면
+            // 새 판을 열 때 그 값이 같이 가서, 개체(avatar.py)에서 기본을
+            // 올려도 화면이 덮어썼다. 비워 두면 서버 것이 온다.
+            level: null,
             levels: [],
         };
 
@@ -10844,7 +10875,14 @@
                     const i = r * row.length + c;
 
                     const sq = document.createElement('div');
-                    sq.className = 'gsq' + (ch === '.' ? '' : ' has');
+
+                    // 화점. 15줄 판에서는 천원(7,7)과 네 귀다.
+                    const star = (r === 7 && c === 7)
+                        || ((r === 3 || r === 11) && (c === 3 || c === 11));
+
+                    sq.className = 'gsq'
+                        + (ch === '.' ? '' : ' has')
+                        + (star ? ' star' : '');
                     sq.dataset.spot = i;
 
                     if (ch !== '.') {
