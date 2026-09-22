@@ -189,7 +189,7 @@ def winner(game):
 LEVELS = {
     "easy": {
         "label": "느긋",
-        "ms": 1500, "spread": 500,
+        "ms": 1450, "spread": 450,
         # 이 확률로 아닌데 친다 — 사람에게 카드를 주게 된다
         "wrong": 0.18,
         # 이 확률로 아예 못 보고 지나간다
@@ -197,14 +197,23 @@ LEVELS = {
     },
     "normal": {
         "label": "보통",
-        "ms": 950, "spread": 300,
+        "ms": 780, "spread": 240,
         "wrong": 0.08,
-        "miss": 0.08,
+        "miss": 0.05,
     },
     "hard": {
         "label": "빠름",
-        "ms": 600, "spread": 150,
+        "ms": 470, "spread": 110,
         "wrong": 0.02,
+        "miss": 0.0,
+    },
+    # 사람이 눈으로 보고 세고 손을 뻗는 데 아무리 빨라도 0.4초는
+    # 든다. 이 세기는 거기에 맞춰 놓은 것이라 **거의 못 이긴다.**
+    # 이기려면 다이아가 틀리게 치는 순간을 노려야 한다.
+    "sharp": {
+        "label": "칼같이",
+        "ms": 330, "spread": 70,
+        "wrong": 0.0,
         "miss": 0.0,
     },
 }
@@ -228,7 +237,9 @@ def roll_reaction(level="normal", mercy=0.0, rng=None):
     ms = conf["ms"] + rng.randint(-conf["spread"], conf["spread"])
 
     if mercy and rng.random() < mercy:
-        ms = int(ms * rng.uniform(1.4, 2.0))
+        # 1.4~2.0 배였는데 그러면 보통 세기에서도 거의 못 이겼다 —
+        # 1초 넘게 기다려 주는 셈이라 봐주는 티도 났다.
+        ms = int(ms * rng.uniform(1.25, 1.6))
 
     return max(120, ms), (rng.random() < conf["wrong"])
 
