@@ -1492,6 +1492,55 @@
         }
 
         /* ============================================================
+           단추 창 모드 (?panel=1)
+
+           배경화면이 된 다이아를 눌렀을 때 뜨는 창이다. **다이아는 안
+           그린다** — 그는 이미 배경화면 쪽에 서 있어서, 여기서 또 그리면
+           둘이 된다.
+
+           남기는 것은 손·놀이·옷장·꾸미기·사이·이야기 칸이다.
+           ============================================================ */
+        body.panel #canvas3d,
+        body.panel #room-video,
+        body.panel #room-plate,
+        body.panel #speech-bubble,
+        body.panel #zzz-indicator,
+        body.panel #stick-pad,
+        body.panel #stick-keys,
+        body.panel #tool-menu { display: none !important; }
+
+        /* 다이아가 없으니 위쪽은 단추 자리만 있으면 된다 */
+        body.panel #avatar-container {
+            flex: none;
+            height: 190px;
+            min-height: 0;
+        }
+
+        /* 도구 막대는 가로로 눕힌다. 세로로 세우면 창을 넘는다. */
+        body.panel #eye-bar {
+            flex-direction: row;
+            top: 104px;
+            left: 8px;
+        }
+
+        /* 이야기는 늘 보이게. 볼 아바타가 없으니 이게 본문이다. */
+        body.panel #chat-messages {
+            display: flex !important;
+            flex: 1;
+            min-height: 0;
+            padding: 10px 12px;
+            max-height: none;
+        }
+
+        body.panel #chat-container { flex: 1; min-height: 0; }
+
+        /* 놀이판이 창을 넘지 않게 */
+        body.panel #chess-panel,
+        body.panel #jg-panel,
+        body.panel #hg-panel,
+        body.panel #go-panel { max-height: 52vh; }
+
+        /* ============================================================
            좁은 화면 — 휴대폰
 
            **가로로 나눠 놓은 것이 깨짐의 원인이다.** 바탕이
@@ -1893,6 +1942,17 @@
         const CLEAR = /[?&]clear\b/.test(String(location.search || ''));
 
         if (CLEAR) document.body.classList.add('clear');
+
+        // 단추 창 모드. 배경화면이 된 다이아를 눌렀을 때 뜨는 창이다.
+        // 다이아는 배경화면 쪽에 이미 서 있으니 여기서는 안 그린다.
+        const PANEL = /[?&]panel\b/.test(String(location.search || ''));
+
+        if (PANEL) {
+            document.body.classList.add('panel');
+
+            // 볼 아바타가 없으니 지난 이야기가 본문이다
+            document.body.classList.add('showlog');
+        }
 
         const scene = new THREE.Scene();
 
@@ -3480,6 +3540,15 @@
 
             const m = motionByKey(key);
             if (!m) return;
+
+            // 배경화면 쪽 다이아에게도 알린다.
+            //
+            // 단추 창과 배경화면은 서로 다른 그림이라, 알려 주지 않으면
+            // 이야기 창에서는 손을 흔드는데 배경화면의 다이아는 가만히
+            // 있다. 앱이 아니면(브라우저) 이 다리가 없으니 그냥 지나간다.
+            try {
+                if (window.DiaWall && DiaWall.motion) DiaWall.motion(key);
+            } catch (e) {}
             player.from = currentPose();
             player.blend = 0;
             player.motion = m;
