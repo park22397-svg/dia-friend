@@ -256,6 +256,76 @@ def sheet(frames, w, h, path):
     return cols
 
 
+def trim_all(out_dir, book, say=print):
+    """모든 칸을 훑어 빈 자리를 잘라낸다. 자른 뒤 크기를 돌려준다."""
+    try:
+        from PIL import Image
+    except ImportError:
+        return None
+
+    import glob
+
+    files = sorted(glob.glob(os.path.join(out_dir, "*", "frame_*.png")))
+
+    if not files:
+        return None
+
+    box = None
+
+    for p in files:
+        b = Image.open(p).convert("RGBA").getbbox()
+
+        if not b:
+            continue
+
+        box = b if box is None else (
+            min(box[0], b[0]), min(box[1], b[1]),
+            max(box[2], b[2]), max(box[3], b[3]))
+
+    if not box:
+        return None
+
+    # 숨 쉴 틈을 조금 남긴다. 딱 붙여 자르면 머리카락이 흔들릴 때 잘린다.
+    first = Image.open(files[0])
+    W, H = first.size
+
+    pad = max(2, int(min(W, H) * 0.02))
+
+    box = (max(0, box[0] - pad), max(0, box[1] - pad),
+           min(W, box[2] + pad), min(H, box[3] + pad))
+
+    nw, nh = box[2] - box[0], box[3] - box[1]
+
+    if nw <= 0 or nh <= 0:
+        return None
+
+    for p in files:
+        Image.open(p).convert("RGBA").crop(box).save(p)
+
+    say("빈 자리를 잘랐다: %dx%d -> %dx%d (%.0f%% 만 남음)"
+        % (W, H, nw, nh, nw * nh * 100.0 / (W * H)))
+
+    # 시트도 다시 만든다
+    for key, m in book.get("motions", {}).items():
+        folder = os.path.join(out_dir, key.replace("@", "_at_"))
+
+        paths = sorted(glob.glob(os.path.join(folder, "frame_*.png")))
+
+        if not paths:
+            continue
+
+        png = key.replace("@", "_at_") + ".png"
+        cols = sheet(paths, nw, nh, os.path.join(out_dir, png))
+
+        m["cols"] = cols
+
+    book["w"] = nw
+    book["h"] = nh
+    book["size"] = nw
+
+    return (nw, nh)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--motions", default="",
@@ -266,6 +336,12 @@ def main():
     ap.add_argument("--h", type=int, default=420, help="한 칸의 높이")
     ap.add_argument("--chibi", type=float, default=1.0,
                     help="머리를 몇 배로. 1.4~1.6 이면 2등신 쪽")
+    ap.add_argument("--no-trim", action="store_true",
+                    help="빈 자리를 안 자른다")
+    ap.add_argument("--fit", default="full",
+                    choices=("full", "upper", "bust"),
+                    help="몸의 어디까지 담을 것인가."
+                         " full=온몸, upper=무릎 위, bust=가슴 위")
     ap.add_argument("--warm", type=int, default=2,
                     help="굽기 전에 몇 바퀴 미리 돌릴 것인가"
                          " (0 이면 흔들림 없이 뻣뻣하게)")
@@ -308,6 +384,23 @@ def main():
 
         br.js("bake.setSize(%d, %d)" % (args.w, args.h))
 
+        # 몸의 어디까지 담을 것인가.
+        #
+        # 온몸을 담으면 화면에 세워 뒀을 때 얼굴이 너무 작다 — 누구인지
+        # 잘 안 보인다. 앱 화면은 훨씬 가까이 잡고 있어서, 그 구도를
+        # 쓰고 싶으면 아래를 잘라 올린다.
+        FITS = {
+            "full": (0.0, 1.0),
+            "upper": (0.32, 1.05),
+            "bust": (0.55, 1.06),
+        }
+
+        lo, hi = FITS.get(args.fit, FITS["full"])
+
+        if args.fit != "full":
+            br.js("bake.setFrame(%f, %f)" % (lo, hi))
+            print("담는 만큼: %s (%.2f~%.2f)" % (args.fit, lo, hi))
+
         if abs(args.chibi - 1.0) > 0.001:
             br.js("bake.setChibi(%f)" % args.chibi)
 
@@ -344,6 +437,7 @@ def main():
         book["size"] = args.w      # 옛 이름도 남겨 둔다
         book["fps"] = args.fps
         book["chibi"] = args.chibi
+        book["fit"] = args.fit
         book["made"] = time.strftime("%Y-%m-%d %H:%M")
 
         turns = []
@@ -430,6 +524,9 @@ def main():
                       % (name, len(paths), turn, time.time() - t0))
 
             br.js("bake.setTurn(0)")
+
+        if not args.no_trim:
+            trim_all(OUT, book)
 
         with open(os.path.join(OUT, "sprites.json"), "w", encoding="utf-8") as f:
             json.dump(book, f, ensure_ascii=False, indent=2)

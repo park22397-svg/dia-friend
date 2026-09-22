@@ -378,6 +378,13 @@ const view = {
     pad: 1.06,        // 둘레 여백
     turn: 0,          // 몸을 몇 도 돌려서 볼 것인가
     box: null,
+
+    // 몸의 어느 만큼을 담을 것인가. 0 이 발끝, 1 이 머리끝이다.
+    //
+    // 온몸(0~1)을 담으면 화면에 세워 뒀을 때 얼굴이 너무 작다.
+    // 앱 화면처럼 가까이 잡으려면 아래를 잘라 올린다(0.32~1.05).
+    low: 0.0,
+    high: 1.0,
 };
 
 function measureBody() {
@@ -403,9 +410,20 @@ function frameCamera() {
     box.getSize(size);
     box.getCenter(mid);
 
-    // 그림이 세로로 길면 키에 맞추고, 가로로 길면 폭에 맞춘다
+    // 몸의 어느 만큼을 담을 것인가.
+    //
+    // 0 이 발끝, 1 이 머리끝이다. 온몸(0~1)을 담으면 얼굴이 작아진다 —
+    // 화면에 세워 두면 누구인지도 잘 안 보인다. 앱 화면처럼 가까이
+    // 잡으려면 아래를 잘라 올린다(예: 0.32~1.05).
+    const yLo = box.min.y + size.y * view.low;
+    const yHi = box.min.y + size.y * view.high;
+
+    const midY = (yLo + yHi) / 2;
+
     const aspect = view.w / view.h;
-    let halfH = (size.y * view.pad) / 2;
+    let halfH = ((yHi - yLo) * view.pad) / 2;
+
+    // 가로로 넘치면 그만큼 넓힌다. 팔을 자르면 안 된다.
     const halfW = (size.x * view.pad) / 2;
 
     if (halfW / aspect > halfH) halfH = halfW / aspect;
@@ -417,8 +435,8 @@ function frameCamera() {
     camera.near = 0.01;
     camera.far = 20;
 
-    camera.position.set(mid.x, mid.y, mid.z + 5);
-    camera.lookAt(mid.x, mid.y, mid.z);
+    camera.position.set(mid.x, midY, mid.z + 5);
+    camera.lookAt(mid.x, midY, mid.z);
     camera.updateProjectionMatrix();
 }
 
@@ -484,6 +502,15 @@ window.bake = {
 
     setSize: setSize,
     setChibi: (k) => { setChibi(k); frameCamera(); },
+
+    /** 몸의 어느 만큼을 담을지. 0=발끝, 1=머리끝. */
+    setFrame: (low, high) => {
+        view.low = low;
+        view.high = high;
+        frameCamera();
+        return [view.low, view.high];
+    },
+
 
     /** 옷장에 무엇이 있나 */
     clothes() {
