@@ -4092,6 +4092,36 @@ def rig_page():
     )
 
 
+@app.route("/api/sprites")
+def sprites_api():
+    """구워 둔 그림이 무엇이 있는가.
+
+    폰 앱이 화면 위에 다이아를 띄울 때 이것을 먼저 받아 간다.
+    그림 자체는 `/static/sprites/...` 로 받는데, /static 이 로그인
+    뒤에 있으므로 **앱도 로그인한 채로 받아야 한다.**
+
+    아직 안 구웠으면 빈 목록을 준다 — 앱이 알아서 안 띄운다.
+    """
+
+    path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "static", "sprites", "sprites.json")
+
+    try:
+        with open(path, encoding="utf-8") as f:
+            book = json.load(f)
+    except FileNotFoundError:
+        return jsonify({"ok": True, "baked": False, "motions": {}})
+    except Exception as e:
+        print(f"[스프라이트 읽기 오류]: {e}")
+        return jsonify({"ok": False, "error": str(e)[:120]}), 500
+
+    book["ok"] = True
+    book["baked"] = bool(book.get("motions"))
+
+    return jsonify(book)
+
+
 @app.route("/bake")
 def bake_page():
     """스프라이트 굽는 자리.
