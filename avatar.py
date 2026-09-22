@@ -3652,9 +3652,10 @@ DIA = VirtualAvatar(
                         "key": "soft", "label": "은은하게",
                         "layers": [
                             {"spot": "cheek", "rgb": [246, 132, 140],
-                             "amount": 0.30, "rx": 0.46, "ry": 0.30, "pull": 0.55},
-                            {"spot": "eyelid", "rgb": [232, 152, 170],
-                             "amount": 0.18, "rx": 0.30, "ry": 0.13, "pull": 0.60},
+                             "dv": 0.20, "du": 0.14,
+                             "amount": 0.26, "rx": 0.42, "ry": 0.28, "pull": 0.55},
+                            {"spot": "eyelid", "rgb": [232, 152, 170], "dv": -0.04,
+                             "amount": 0.15, "rx": 0.28, "ry": 0.11, "pull": 0.60},
                             {"spot": "lip", "rgb": [228, 100, 112], "dv": 0.07,
                              "amount": 0.30, "rx": 0.26, "ry": 0.10, "pull": 0.72},
                         ],
@@ -3663,9 +3664,10 @@ DIA = VirtualAvatar(
                         "key": "bold", "label": "또렷하게",
                         "layers": [
                             {"spot": "cheek", "rgb": [242, 118, 128],
-                             "amount": 0.38, "rx": 0.44, "ry": 0.29, "pull": 0.55},
-                            {"spot": "eyelid", "rgb": [201, 139, 180],
-                             "amount": 0.34, "rx": 0.32, "ry": 0.14, "pull": 0.60},
+                             "dv": 0.20, "du": 0.14,
+                             "amount": 0.32, "rx": 0.42, "ry": 0.28, "pull": 0.55},
+                            {"spot": "eyelid", "rgb": [214, 150, 178], "dv": -0.04,
+                             "amount": 0.22, "rx": 0.30, "ry": 0.12, "pull": 0.60},
                             {"spot": "lip", "rgb": [216, 72, 88], "dv": 0.07,
                              "amount": 0.52, "rx": 0.27, "ry": 0.11, "pull": 0.72},
                         ],
@@ -3674,7 +3676,8 @@ DIA = VirtualAvatar(
                         "key": "rosy", "label": "발그레",
                         "layers": [
                             {"spot": "cheek", "rgb": [248, 126, 128],
-                             "amount": 0.52, "rx": 0.50, "ry": 0.33, "pull": 0.55},
+                             "dv": 0.20, "du": 0.14,
+                             "amount": 0.42, "rx": 0.46, "ry": 0.30, "pull": 0.55},
                             {"spot": "lip", "rgb": [230, 108, 118], "dv": 0.07,
                              "amount": 0.26, "rx": 0.26, "ry": 0.10, "pull": 0.72},
                         ],
@@ -7440,7 +7443,16 @@ DIA = VirtualAvatar(
         # 옷 자리(top/skirt)의 allow_from 을 그대로 쓴다.
 
         "undress": {
-            "enabled": True,
+            # 껐다 (2026-09-22, 사용자 지시).
+            #
+            # 두 번 눌러 옷이 벗겨지는 것은 **누르려다 잘못 눌리기 쉽다.**
+            # 옷은 옷장에서 고르거나 말로 갈아입는다.
+            #
+            # 되살리려면 True 로 두면 된다. 화면 쪽 길은 그대로 있다.
+            #
+            # ※ 이 "undress" 칸은 이 표에 **두 번** 적혀 있다. 파이썬은
+            #   나중 것을 쓴다. 고칠 때는 둘 다 고쳐야 한다.
+            "enabled": False,
             # 벗길 수 있는 자리
             "zones": ["top", "skirt", "shoes"],
             # 벗을 때 / 입을 때의 얼굴
@@ -7497,7 +7509,16 @@ DIA = VirtualAvatar(
         },
 
         "undress": {
-            "enabled": True,
+            # 껐다 (2026-09-22, 사용자 지시).
+            #
+            # 두 번 눌러 옷이 벗겨지는 것은 **누르려다 잘못 눌리기 쉽다.**
+            # 옷은 옷장에서 고르거나 말로 갈아입는다.
+            #
+            # 되살리려면 True 로 두면 된다. 화면 쪽 길은 그대로 있다.
+            #
+            # ※ 이 "undress" 칸은 이 표에 **두 번** 적혀 있다. 파이썬은
+            #   나중 것을 쓴다. 고칠 때는 둘 다 고쳐야 한다.
+            "enabled": False,
             # 벗길 수 있는 자리
             "zones": ["top", "skirt", "shoes"],
             # 벗을 때 / 입을 때의 얼굴

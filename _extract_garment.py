@@ -694,6 +694,82 @@ def waist_cover(go, bo, off, body_pos, tris, hide,
     return extra
 
 
+def zone_masks(go, bo, off, body_pos, tris, hide, say=print):
+    """감춘 삼각형을 **어느 옷이 덮고 있나** 로 나눈다.
+
+    가리개가 옷 한 벌에 하나뿐이면 윗옷만 벗겨도 걷을 수가 없다.
+    걷지 않으면 벗긴 자리의 살이 숨은 채로 남아 몸에 구멍이 나고,
+    통째로 걷으면 남아 있는 치마 밑 살까지 되살아나 비친다.
+
+    나누는 법은 간단하다 — **감춘 삼각형에서 가장 가까운 옷이 그 주인**
+    이다. 윗옷이 덮은 살은 윗옷이 제일 가깝고, 치마가 덮은 살은 치마가
+    제일 가깝다.
+    """
+    by_zone = {}
+
+    for m in go.get('meshes', []):
+        for p in m['primitives']:
+            z = zone_of(mat_name(go, p))
+
+            if z not in ('top', 'skirt', 'shoes', 'onepiece'):
+                continue
+
+            ii = np.unique(acc_read(go, bo, p['indices']).astype(np.int64))
+            v = acc_read(go, bo, p['attributes']['POSITION'])
+            by_zone.setdefault(z, []).append(v.astype(np.float64)[ii] - off)
+
+    if not by_zone or not hide.any():
+        return None
+
+    for z in list(by_zone):
+        by_zone[z] = np.concatenate(by_zone[z])
+
+    cent = body_pos[tris].mean(axis=1)
+    idx = np.nonzero(hide)[0]
+    pts = cent[idx]
+
+    best = None
+    who = None
+
+    for z, v in by_zone.items():
+        d = np.full(len(pts), np.inf)
+
+        # 덩어리로 나눠 잰다. 한 번에 하면 자리가 몇백 MB 로 불어난다.
+        step = 1024
+
+        for s0 in range(0, len(v), step):
+            chunk = v[s0:s0 + step]
+            dd = np.sqrt(((pts[:, None, :] - chunk[None, :, :]) ** 2)
+                         .sum(axis=2)).min(axis=1)
+            d = np.minimum(d, dd)
+
+        if best is None:
+            best = d
+            who = np.array([z] * len(pts), dtype=object)
+        else:
+            take = d < best
+            best = np.where(take, d, best)
+            who[take] = z
+
+    out = {}
+
+    for z in by_zone:
+        m = np.zeros(len(tris), dtype=bool)
+        m[idx[who == z]] = True
+
+        if not m.any():
+            continue
+
+        out[z] = {
+            'hidden': int(m.sum()),
+            'mask': base64.b64encode(np.packbits(m).tobytes()).decode('ascii'),
+        }
+
+        say('   %-9s 가 덮는 살 %d개' % (z, int(m.sum())))
+
+    return out or None
+
+
 def body_mask(base_path, outfit_path, say=print):
     """맨몸에서 감출 삼각형을 찾는다.
 
@@ -796,8 +872,15 @@ def body_mask(base_path, outfit_path, say=print):
         hide |= extra
         say('  허리 띠에서 옷이 덮는 살 %d개를 더 감춘다' % int(extra.sum()))
 
+    zones = zone_masks(go, bo, off, pb, tris, hide, say)
+
     packed = np.packbits(hide)
     return {
+        # 부위마다 따로 만든 가리개.
+        #
+        # 옷 한 벌에 하나뿐이면 윗옷만 벗겨도 걷을 수가 없다.
+        # 없으면(옛 판) 화면이 통짜 가리개를 쓴다.
+        'zones': zones,
         # 어느 메시를 가릴 것인가.
         #
         # ★ 재질 이름으로 찾으면 안 된다. three-vrm 이 MToon 으로 바꿔 끼우면서
