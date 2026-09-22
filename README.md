@@ -12,22 +12,28 @@ Flask + Ollama + VRM 으로 만든 아바타 챗봇. 이름은 **다이아**.
 
 ## 돌리는 법
 
-```bash
-pip install flask requests
-python main.py
+```powershell
+pip install -r requirements.txt
+.\시작.ps1
 ```
 
 `http://127.0.0.1:5000`
+
+다른 사람에게 보일 판을 띄우는 것은 `.\띄우기.ps1` 이다 —
+고치면 다시 읽는 기능(debug)이 꺼진 채로 돌아간다. 켜 둔 채로
+밖에 열어 두면 오류 화면에서 그 컴퓨터의 파이썬을 실행할 수 있다.
+
+넘기는 문서는 [선생님께.md](선생님께.md) 에 따로 있다.
 
 ### 따로 넣어야 하는 것
 
 | 파일 | 무엇 |
 |---|---|
 | `static/avatar.vrm` | 옷 입은 아바타 |
-| `static/표현용.vrm` | 맨몸 + 절정 표정용 |
+| `static/body.vrm` | 옷 아래 몸 (옷을 당길 때 비침 방지) |
 
 두 파일은 라이선스가 `Redistribution_Prohibited` 라 저장소에 없다.
-표현용이 없으면 `avatar.py` 의 `model["layered"]` 를 `False` 로 둔다.
+`body.vrm` 이 없으면 `avatar.py` 의 `model["layered"]` 를 `False` 로 둔다.
 
 `config.py` 의 `OLLAMA_URL` 과 `OLLAMA_MODEL` 을 쓰는 서버에 맞춘다.
 

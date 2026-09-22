@@ -4248,9 +4248,24 @@ if __name__ == "__main__":
         "========================================"
     )
 
+    # 고칠 때마다 저절로 다시 읽는 것(debug)은 **만드는 동안만** 켠다.
+    #
+    # 켠 채로 밖에 열어 두면 안 된다. 오류가 나면 브라우저에
+    # 코드가 그대로 펼쳐지고, 거기서 이 컴퓨터의 파이썬을 실행할 수
+    # 있는 창구(Werkzeug 디버거)가 같이 열린다.
+    #
+    # 그래서 기본은 꺼 둔다. 만들 때는 시작.ps1 이 DIA_DEBUG=1 을
+    # 넣어 주므로 예전과 똑같이 돈다.
+    debug = os.environ.get("DIA_DEBUG", "").strip() in ("1", "true", "True")
+
+    port = int(os.environ.get("PORT", "5000") or 5000)
+
+    print("    " + ("만드는 중(고치면 다시 읽음)" if debug else "그냥 돌림")
+          + " · 포트 " + str(port))
+
     app.run(
         host="0.0.0.0",
-        port=5000,
-        debug=True
+        port=port,
+        debug=debug
     )
 
