@@ -256,6 +256,16 @@ def load_memory_data():
     if not isinstance(wearing, dict):
         wearing = {}
 
+    # 눈 색과 화장.
+    #
+    # **장소·옷·장면과 똑같은 함정에 걸린다.** 이 함수는 아는 항목만
+    # 골라 새 dict 를 만들어 돌려주므로, 여기 안 적으면 저장할 때마다
+    # 지워진다 — 눈 색을 골라 놓고 한 마디 하면 본래 색으로 돌아간다.
+    look = data.get("look", {})
+
+    if not isinstance(look, dict):
+        look = {}
+
     # 지금이 어떤 자리인가 — 노래방인가, 사진 찍는 중인가.
     #
     # **장소·옷과 똑같은 함정에 걸린다.** 이 함수가 아는 항목만 골라
@@ -290,6 +300,7 @@ def load_memory_data():
         "rps": game_rps,
         "place": place,
         "wearing": wearing,
+        "look": look,
         "scene": scene,
         "word_chain": chain,
         "gomoku": stones,
@@ -332,6 +343,38 @@ def save_wearing(slot, key):
     w[str(slot)] = str(key or "")
 
     data["wearing"] = w
+    save_memory_data(data)
+
+    return w
+
+
+def load_look():
+    """지금 꾸밈새. {"eye": 색이름, "makeup": 화장이름} 으로 돌려준다.
+
+    옷과 같은 자리다 — 창을 닫았다 열어도 그대로여야 한다.
+    아직 아무것도 안 고른 사람은 빈 dict 다(그때는 본래 얼굴).
+    """
+    w = load_memory_data().get("look", {})
+
+    if not isinstance(w, dict):
+        return {}
+
+    return {k: str(v or "") for k, v in w.items() if isinstance(v, str)}
+
+
+def save_look(part, key):
+    """그 칸에 무엇을 골랐는지 적는다. 'eye' 와 'makeup' 두 칸이다."""
+    data = load_memory_data()
+
+    w = data.get("look")
+
+    if not isinstance(w, dict):
+        w = {}
+
+    w = dict(w)
+    w[str(part)] = str(key or "")
+
+    data["look"] = w
     save_memory_data(data)
 
     return w

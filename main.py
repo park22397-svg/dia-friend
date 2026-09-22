@@ -2757,6 +2757,85 @@ def wardrobe_wear_api():
                     "all": memory_manager.load_wearing()})
 
 
+# ============================================================
+# 꾸밈새 — 눈 색과 화장
+#
+# 옷장과 같은 얼개다. 무엇을 고를 수 있는지는 개체(avatar.py)가 쥐고,
+# 무엇을 골랐는지는 기억에 적는다. **칠하는 일은 화면이 한다** —
+# 텍스처를 캔버스로 옮겨 그 자리만 고쳐 칠한다. 색깔마다 텍스처를
+# 구워 두면 눈 한 색이 1MB 다.
+# ============================================================
+
+def _look_conf():
+    return ((AVATAR.model or {}).get("look") or {})
+
+
+def _look_keys(part):
+    """그 칸에 있는 이름들. 없는 것을 고르면 안 받는다."""
+    conf = _look_conf().get(part) or {}
+
+    if part == "eye":
+        return [c.get("key") for c in conf.get("colors", []) if c.get("key")]
+
+    return [i.get("key") for i in conf.get("items", []) if i.get("key")]
+
+
+def _look_now():
+    """지금 무엇을 하고 있는가. 안 고른 칸은 개체가 정한 기본값."""
+    conf = _look_conf()
+    saved = memory_manager.load_look()
+
+    out = {}
+
+    for part in ("eye", "makeup"):
+        want = saved.get(part)
+
+        if want and want in _look_keys(part):
+            out[part] = want
+        else:
+            out[part] = (conf.get(part) or {}).get("default") or ""
+
+    return out
+
+
+@app.route("/api/look")
+def look_api():
+    """고를 수 있는 것과 지금 고른 것."""
+
+    conf = _look_conf()
+
+    return jsonify({
+        "ok": True,
+        "enabled": bool(conf.get("enabled", True)),
+        "eye": conf.get("eye") or {},
+        "makeup": conf.get("makeup") or {},
+        "now": _look_now(),
+    })
+
+
+@app.route("/api/look", methods=["POST"])
+def look_set_api():
+    """눈 색이나 화장을 골랐다. 창을 닫았다 열어도 그대로여야 한다."""
+
+    data = request.get_json(silent=True) or {}
+
+    part = str(data.get("part") or "").strip()
+    key = str(data.get("key") or "").strip()
+
+    if part not in ("eye", "makeup"):
+        return jsonify({"ok": False, "error": "그런 칸은 없습니다."}), 400
+
+    # 없는 이름은 안 받는다. 받으면 화면은 못 그리고 기억에만 남는다.
+    if key and key not in _look_keys(part):
+        return jsonify({"ok": False, "error": "그런 것은 없습니다."}), 400
+
+    memory_manager.save_look(part, key)
+
+    print("[꾸밈새] %s: %s" % (part, key or "기본"))
+
+    return jsonify({"ok": True, "now": _look_now()})
+
+
 @app.route("/api/background")
 def background_api():
 
