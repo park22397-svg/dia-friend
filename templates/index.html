@@ -2072,6 +2072,20 @@
         const floorParts = buildFloor(-0.2);
         const footShadow = floorParts.shadow;
 
+        // 비치는 모드에서는 **만들 때부터 끈다.**
+        //
+        // setFloorVisible() 에만 막아 뒀더니, 그 함수를 부르기 전까지는
+        // 바닥이 그려져 있었다. 폰에서 열면 한참 동안 격자 바닥이
+        // 보이다가 나중에야 사라졌다(2026-09-22 에 사진으로 확인).
+        //
+        // 발밑 그림자도 끈다. 배경화면 위에 검은 얼룩처럼 보인다.
+        if (CLEAR) {
+            floorGrid.visible = false;
+            floorParts.floor.visible = false;
+
+            if (footShadow) footShadow.visible = false;
+        }
+
         // 방을 겹칠 때는 우리가 그린 바닥을 걷는다.
         // 카메라에 이미 진짜 바닥이 있는데 그 위에 원판을 얹으면
         // 바닥이 두 겹으로 보인다. 발밑 그림자만 남긴다 —
