@@ -72,3 +72,13 @@ _tools/
 
 # 만들어 둔 목소리. 다시 만들 수 있는 것이라 안 올린다.
 _voice_cache/
+
+# 구운 다이아 그림.
+#
+# 아바타를 돌려 만든 것이라 **아바타를 다시 뿌리는 것과 같다.**
+# 파일 안에 Redistribution_Prohibited 가 박혀 있는 물건에서 나왔으므로
+# static/*.vrm 과 같은 자리에 둔다. VRoid 에서 재배포 허용으로 다시
+# 내보내면 그때 풀면 된다.
+#
+# 다시 만드는 법: python _bake_sprites.py
+static/sprites/

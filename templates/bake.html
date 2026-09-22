@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>다이아 — 스프라이트 굽는 자리</title>
+
+<script src="https://unpkg.com/three@0.137.0/build/three.min.js"></script>
+<script src="https://unpkg.com/three@0.137.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://unpkg.com/@pixiv/three-vrm@0.6.11/lib/three-vrm.js"></script>
+
+<style>
+    html, body {
+        margin: 0;
+        padding: 0;
+        background: #20233a;      /* 굽는 그림에는 안 들어간다. 눈으로 볼 때만 */
+        overflow: hidden;
+    }
+
+    /* 바둑판 무늬 — 투명한 자리가 어디인지 눈으로 보이라고 */
+    #stage {
+        display: inline-block;
+        background-image:
+            linear-gradient(45deg, #2a2e48 25%, transparent 25%),
+            linear-gradient(-45deg, #2a2e48 25%, transparent 25%),
+            linear-gradient(45deg, transparent 75%, #2a2e48 75%),
+            linear-gradient(-45deg, transparent 75%, #2a2e48 75%);
+        background-size: 16px 16px;
+        background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+    }
+
+    #note {
+        position: fixed;
+        left: 10px;
+        bottom: 8px;
+        color: #8f93b8;
+        font: 12px 'Malgun Gothic', sans-serif;
+    }
+</style>
+</head>
+<body>
+
+<div id="stage"><canvas id="c"></canvas></div>
+<div id="note">굽는 자리 — <code>_bake_sprites.py</code> 가 부른다</div>
+
+<script>
+// ============================================================
+// 스프라이트 굽는 자리
+//
+// 휴대폰 화면 위에 늘 떠 있으려면 3D 를 계속 돌릴 수 없다. 배터리도
+// 배터리지만, 오버레이 창에서 WebGL 을 켜 두는 것 자체가 무겁다.
+// 그래서 **미리 돌려서 그림으로 구워 둔다.**
+//
+// 이 자리가 하는 일은 셋뿐이다.
+//   1. 운영과 같은 VRM·같은 동작표를 불러온다
+//   2. 시간 t 의 자세를 만들어 세운다 (그리기 고리 없이 한 칸씩)
+//   3. 배경 없이 한 장 떠서 돌려준다
+//
+// **배경이 투명해야 한다.** 오버레이 위에 얹을 그림이라 바탕이
+// 같이 구워지면 네모난 판이 화면에 떠다닌다.
+//
+// **preserveDrawingBuffer 를 켜야 한다.** 안 켜면 그린 직후가 아닌
+// 한 그 캔버스를 떠도 새까맣게 나온다.
+// ============================================================
+
+const canvas = document.getElementById('c');
+
+const renderer = new THREE.WebGLRenderer({
+    canvas: canvas,
+    antialias: true,
+    alpha: true,                 // 배경 없이
+    preserveDrawingBuffer: true  // 떠 갈 수 있게
+});
+
+renderer.setPixelRatio(1);       // 구울 때는 픽셀이 정확해야 한다
+renderer.setClearColor(0x000000, 0);
+renderer.outputEncoding = THREE.sRGBEncoding;
+
+const scene = new THREE.Scene();
+
+// 카메라는 **정사영**이다. 원근을 쓰면 다이아가 화면 가장자리로
+// 갈 때마다 기울어 보인다 — 스프라이트는 어디에 놓든 같아야 한다.
+let camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 20);
+
+// 빛. 운영 화면과 같은 느낌이되 그림자는 안 쓴다.
+const key = new THREE.DirectionalLight(0xffffff, 1.0);
+key.position.set(0.4, 1.0, 1.0).normalize();
+scene.add(key);
+
+const rim = new THREE.DirectionalLight(0xa8b6ff, 0.5);
+rim.position.set(-0.9, 0.5, -1.0).normalize();
+scene.add(rim);
+
+const fill = new THREE.DirectionalLight(0xffffff, 0.22);
+fill.position.set(0, -1, 0.4).normalize();
+scene.add(fill);
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.34));
+
+const DEG = Math.PI / 180;
+
+let ENTITY = null;
+let vrm = null;
+let boneNodes = {};
+
+const EASE = {
+    linear: u => u,
+    easeIn: u => u * u,
+    easeOut: u => 1 - (1 - u) * (1 - u),
+    easeInOut: u => u * u * (3 - 2 * u)
+};
+
+function basePose() {
+    return (ENTITY && ENTITY.base_pose) ? ENTITY.base_pose : {};
+}
+
+function motionByKey(k) {
+    if (!ENTITY) return null;
+    return (ENTITY.motions || []).find(m => m.key === k) || null;
+}
+
+// 운영 화면(index.html)의 것과 같은 셈이다. 바뀌면 같이 고쳐야 한다.
+function samplePose(m, t) {
+    const base = basePose();
+    const pose = {};
+    Object.keys(base).forEach(n => pose[n] = base[n].slice());
+
+    const keys = m.keys;
+    let a = keys[0], b = keys[0], u = 0;
+
+    if (t <= keys[0].t) {
+        a = b = keys[0];
+    } else if (t >= keys[keys.length - 1].t) {
+        a = b = keys[keys.length - 1];
+    } else {
+        for (let i = 0; i < keys.length - 1; i++) {
+            if (t >= keys[i].t && t < keys[i + 1].t) {
+                a = keys[i];
+                b = keys[i + 1];
+                u = (t - a.t) / (b.t - a.t);
+                break;
+            }
+        }
+    }
+
+    const e = (EASE[m.ease] || EASE.easeInOut)(u);
+
+    (m.channels || []).forEach(n => {
+        const bs = base[n] || [0, 0, 0];
+        const ra = (a.bones && a.bones[n]) || bs;
+        const rb = (b.bones && b.bones[n]) || bs;
+        pose[n] = [
+            ra[0] + (rb[0] - ra[0]) * e,
+            ra[1] + (rb[1] - ra[1]) * e,
+            ra[2] + (rb[2] - ra[2]) * e
+        ];
+    });
+
+    return pose;
+}
+
+function applyPose(pose) {
+    Object.keys(pose).forEach(n => {
+        const node = boneNodes[n];
+        if (!node) return;
+        const r = pose[n];
+        node.rotation.set(r[0] * DEG, r[1] * DEG, r[2] * DEG);
+    });
+}
+
+function cacheBones() {
+    boneNodes = {};
+    if (!vrm || !vrm.humanoid) return;
+
+    const names = new Set(Object.keys(basePose()));
+    (ENTITY.motions || []).forEach(
+        m => (m.channels || []).forEach(n => names.add(n)));
+
+    names.forEach(n => {
+        let node = null;
+        try { node = vrm.humanoid.getBoneNode(n); } catch (e) {}
+        if (node) boneNodes[n] = node;
+    });
+}
+
+// ------------------------------------------------------------
+// 옷
+//
+// **바탕 아바타는 맨몸이다.** 옷은 옷장에서 따로 얹는 구조라,
+// 그냥 구우면 속옷 차림이 나온다(실제로 그렇게 한 번 구웠다).
+//
+// 옷 VRM 은 뼈대가 같다. 이름이 같은 뼈끼리 자리를 베껴 주면
+// 몸을 따라 움직인다. 옷에 가린 몸 삼각형은 감춰야 살이 안 비친다.
+// ------------------------------------------------------------
+
+const WEAR = {};              // 칸 -> {vrm, pairs, item}
+let bodyMaskMesh = null;
+let bodyFullIndex = null;
+
+function bindWearBones(slot) {
+    const cur = WEAR[slot];
+    if (!cur || !vrm) return;
+
+    cur.pairs = [];
+
+    const src = new Map();
+    vrm.scene.traverse(o => {
+        if (o.isBone || o.type === 'Bone') src.set(o.name, o);
+    });
+
+    cur.vrm.scene.traverse(o => {
+        if (!(o.isBone || o.type === 'Bone')) return;
+        const a = src.get(o.name);
+        if (a) cur.pairs.push([a, o]);
+    });
+}
+
+function syncWear() {
+    if (!vrm) return;
+
+    Object.keys(WEAR).forEach(slot => {
+        const cur = WEAR[slot];
+        if (!cur) return;
+
+        cur.vrm.scene.position.copy(vrm.scene.position);
+        cur.vrm.scene.quaternion.copy(vrm.scene.quaternion);
+
+        // **자리를 통째로 베낀다.** 회전만 베끼면 걷거나 뛸 때
+        // 옷만 제자리에 남는다.
+        const pairs = cur.pairs;
+
+        for (let i = 0; i < pairs.length; i++) {
+            const a = pairs[i][0], b = pairs[i][1];
+            b.position.copy(a.position);
+            b.quaternion.copy(a.quaternion);
+            b.scale.copy(a.scale);
+        }
+    });
+}
+
+// 옷에 가린 몸 삼각형을 감춘다. 운영 화면의 것과 같은 셈이다.
+//
+// 재질 이름으로 몸 메시를 찾으면 안 된다 — three-vrm 이 MToon 으로
+// 바꿔 끼우면서 이름이 빈 문자열이 된다. 삼각형 수로 찾는다.
+function applyBodyMask() {
+    if (!vrm) return;
+
+    const masks = [];
+
+    Object.keys(WEAR).forEach(slot => {
+        const it = WEAR[slot] && WEAR[slot].item;
+        if (it && it.hide && it.hide.mask) masks.push(it.hide);
+    });
+
+    const want = masks.length ? masks[0].triangles : null;
+
+    if (!bodyMaskMesh && want !== null) {
+        vrm.scene.traverse(o => {
+            if (!(o.isMesh || o.isSkinnedMesh) || !o.geometry.index) return;
+            if (o.geometry.index.count / 3 === want) bodyMaskMesh = o;
+        });
+    }
+
+    if (!bodyMaskMesh) return;
+
+    if (!bodyFullIndex) bodyFullIndex = bodyMaskMesh.geometry.index.array;
+
+    const idx = bodyFullIndex;
+    const tris = idx.length / 3;
+
+    if (!masks.length) {
+        bodyMaskMesh.geometry.setIndex(new THREE.BufferAttribute(idx, 1));
+        return;
+    }
+
+    const bits = masks.map(h => {
+        const bin = atob(h.mask);
+        const by = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) by[i] = bin.charCodeAt(i);
+        return by;
+    });
+
+    const keep = [];
+
+    for (let t = 0; t < tris; t++) {
+        let off = false;
+
+        for (let m = 0; m < bits.length; m++) {
+            if ((bits[m][t >> 3] >> (7 - (t & 7))) & 1) { off = true; break; }
+        }
+
+        if (off) continue;
+
+        keep.push(idx[t * 3], idx[t * 3 + 1], idx[t * 3 + 2]);
+    }
+
+    bodyMaskMesh.geometry.setIndex(
+        new THREE.BufferAttribute(new idx.constructor(keep), 1));
+}
+
+let wardrobe = { items: [], worn: {} };
+
+function wearItem(key) {
+    return (wardrobe.items || []).find(x => x.key === key) || null;
+}
+
+function wearOne(key) {
+    const item = wearItem(key);
+
+    if (!item) return Promise.resolve(false);
+
+    const slot = item.slot || 'outfit';
+
+    return new Promise(resolve => {
+        new THREE.GLTFLoader().load(
+            '/static/wardrobe/' + item.file,
+            (gltf) => {
+                THREE.VRM.from(gltf).then(w => {
+                    WEAR[slot] = { vrm: w, pairs: [], item: item };
+                    w.scene.rotation.y = Math.PI;
+                    scene.add(w.scene);
+
+                    bindWearBones(slot);
+                    applyBodyMask();
+                    syncWear();
+
+                    resolve(true);
+                }).catch(() => resolve(false));
+            },
+            undefined,
+            () => resolve(false)
+        );
+    });
+}
+
+// ------------------------------------------------------------
+// 표정
+// ------------------------------------------------------------
+
+function setFace(key) {
+    if (!vrm || !vrm.blendShapeProxy) return;
+
+    const proxy = vrm.blendShapeProxy;
+
+    // 먼저 다 내린다. 안 그러면 앞 표정이 남아 겹친다.
+    ['joy', 'angry', 'sorrow', 'fun', 'blink', 'a', 'i', 'u', 'e', 'o']
+        .forEach(n => { try { proxy.setValue(n, 0); } catch (e) {} });
+
+    const e = ((ENTITY && ENTITY.expressions) || [])
+        .find(x => x.key === key);
+
+    if (!e) return;
+
+    Object.keys(e.groups || {}).forEach(g => {
+        try { proxy.setValue(g, e.groups[g]); } catch (err) {}
+    });
+
+    Object.keys(e.morphs || {}).forEach(nm => {
+        vrm.scene.traverse(o => {
+            if (!o.morphTargetDictionary) return;
+            const i = o.morphTargetDictionary[nm];
+            if (i !== undefined) o.morphTargetInfluences[i] = e.morphs[nm];
+        });
+    });
+
+    try { proxy.update(); } catch (err) {}
+}
+
+// ------------------------------------------------------------
+// 화면 잡기
+//
+// 머리끝부터 발끝까지가 그림 안에 들어와야 한다. 사람이 숫자를
+// 적는 대신 **뼈에서 잰다** — 아바타를 바꿔도 알아서 맞는다.
+// ------------------------------------------------------------
+
+const view = {
+    w: 256, h: 256,
+    chibi: 1.0,       // 머리를 몇 배로 (1 이면 그대로)
+    pad: 1.06,        // 둘레 여백
+    turn: 0,          // 몸을 몇 도 돌려서 볼 것인가
+    box: null,
+};
+
+function measureBody() {
+    const box = new THREE.Box3().setFromObject(vrm.scene);
+    view.box = box;
+    return box;
+}
+
+function setChibi(k) {
+    view.chibi = k;
+
+    let head = null;
+    try { head = vrm.humanoid.getBoneNode('head'); } catch (e) {}
+
+    if (head) head.scale.setScalar(k);
+}
+
+function frameCamera() {
+    const box = measureBody();
+    const size = new THREE.Vector3();
+    const mid = new THREE.Vector3();
+
+    box.getSize(size);
+    box.getCenter(mid);
+
+    // 그림이 세로로 길면 키에 맞추고, 가로로 길면 폭에 맞춘다
+    const aspect = view.w / view.h;
+    let halfH = (size.y * view.pad) / 2;
+    const halfW = (size.x * view.pad) / 2;
+
+    if (halfW / aspect > halfH) halfH = halfW / aspect;
+
+    camera.left = -halfH * aspect;
+    camera.right = halfH * aspect;
+    camera.top = halfH;
+    camera.bottom = -halfH;
+    camera.near = 0.01;
+    camera.far = 20;
+
+    camera.position.set(mid.x, mid.y, mid.z + 5);
+    camera.lookAt(mid.x, mid.y, mid.z);
+    camera.updateProjectionMatrix();
+}
+
+function setSize(w, h) {
+    view.w = w;
+    view.h = h;
+    renderer.setSize(w, h, false);
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
+    frameCamera();
+}
+
+// ------------------------------------------------------------
+// 한 칸 굽기
+// ------------------------------------------------------------
+
+function shoot() {
+    // 옷이 몸을 따라오게. 자세를 준 뒤에 해야 한다.
+    syncWear();
+
+    if (vrm && vrm.springBoneManager) {
+        // 머리카락 흔들림은 시간에 기대므로 굽는 동안에는 쓰지 않는다.
+        // 그냥 두면 같은 t 를 두 번 구워도 그림이 달라진다.
+        try { vrm.springBoneManager.reset(); } catch (e) {}
+    }
+
+    renderer.render(scene, camera);
+
+    // **그린 그 자리에서 떠야 한다.** 한 프레임만 지나도 지워진다.
+    return canvas.toDataURL('image/png');
+}
+
+window.bake = {
+    ready: false,
+    error: null,
+
+    list() {
+        return (ENTITY.motions || []).map(m => ({
+            key: m.key,
+            label: m.label,
+            duration: m.duration,
+            loop: !!m.loop,
+            expression: m.expression || null,
+        }));
+    },
+
+    setSize: setSize,
+    setChibi: (k) => { setChibi(k); frameCamera(); },
+
+    /** 옷장에 무엇이 있나 */
+    clothes() {
+        return (wardrobe.items || []).map(
+            it => ({ key: it.key, slot: it.slot || 'outfit', label: it.label }));
+    },
+
+    /** 한 벌 입힌다. 입힌 뒤에는 화면을 다시 잡는다(치마가 넓다). */
+    async wear(key) {
+        const ok = await wearOne(key);
+        if (ok) frameCamera();
+        return ok;
+    },
+
+    setTurn: (deg) => { view.turn = deg; vrm.scene.rotation.y = Math.PI + deg * DEG; },
+    setFace: setFace,
+
+    /** 그 동작의 t 초 자세로 한 장. t 는 초. */
+    frame(key, t, face) {
+        const m = motionByKey(key);
+
+        if (!m) return null;
+
+        applyPose(samplePose(m, Math.max(0, Math.min(t, m.duration))));
+
+        if (face !== undefined) setFace(face);
+
+        return shoot();
+    },
+
+    /** 가만히 선 자세 한 장 (동작 없이) */
+    still(face) {
+        applyPose(basePose());
+        if (face !== undefined) setFace(face);
+        return shoot();
+    },
+};
+
+// ------------------------------------------------------------
+// 불러오기
+// ------------------------------------------------------------
+
+async function start() {
+    try {
+        ENTITY = await fetch('/api/avatar').then(r => r.json());
+
+        const url = (ENTITY.model && ENTITY.model.vrm) || '/static/avatar.vrm';
+
+        const gltf = await new Promise((res, rej) => {
+            new THREE.GLTFLoader().load(url, res, undefined, rej);
+        });
+
+        if (THREE.VRMUtils) THREE.VRMUtils.removeUnnecessaryJoints(gltf.scene);
+
+        vrm = await THREE.VRM.from(gltf);
+        scene.add(vrm.scene);
+
+        // 이쪽을 보고 서게. 운영 화면과 같다.
+        vrm.scene.rotation.y = Math.PI;
+
+        cacheBones();
+        applyPose(basePose());
+
+        // 지금 걸치고 있는 것을 그대로 입힌다.
+        //
+        // 안 입히면 속옷 차림으로 구워진다 — 바탕 아바타가 맨몸이라서다.
+        try {
+            wardrobe = await fetch('/api/wardrobe').then(r => r.json());
+
+            const worn = wardrobe.worn || {};
+
+            for (const slot of Object.keys(worn)) {
+                if (worn[slot]) await wearOne(worn[slot]);
+            }
+
+            // 아무것도 안 걸치고 있으면 옷장의 첫 옷을 입힌다.
+            if (!Object.keys(WEAR).length) {
+                const first = (wardrobe.items || []).find(
+                    it => (it.slot || 'outfit') === 'outfit');
+
+                if (first) await wearOne(first.key);
+            }
+        } catch (e) {
+            console.warn('옷장을 못 불렀다', e);
+        }
+
+        setSize(view.w, view.h);
+
+        window.bake.ready = true;
+        document.getElementById('note').textContent =
+            '준비됨 — 동작 ' + (ENTITY.motions || []).length + '개';
+
+    } catch (e) {
+        window.bake.error = String(e && e.message || e);
+        document.getElementById('note').textContent = '실패: ' + window.bake.error;
+    }
+}
+
+start();
+</script>
+</body>
+</html>
