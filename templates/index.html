@@ -1943,6 +1943,24 @@
 
         if (CLEAR) document.body.classList.add('clear');
 
+        // 왼쪽 도구 막대를 보일 것인가.
+        //
+        // 개체(avatar.py)의 model.ui.eye_bar 가 정한다. 껐다고 해서
+        // 기능이 사라지는 것은 아니다 — 단추만 안 보인다.
+        // 개체는 아직 안 왔을 수 있으므로, 온 뒤에 다시 한 번 본다.
+        function applyUiConf() {
+            const ui = (ENTITY && ENTITY.model && ENTITY.model.ui) || {};
+            const bar = document.getElementById('eye-bar');
+
+            if (bar) bar.style.display = (ui.eye_bar === false) ? 'none' : '';
+
+            // 막대 안에서 안 보일 단추만 고른 경우
+            (ui.hide_buttons || []).forEach(id => {
+                const b = document.getElementById(id);
+                if (b) b.style.display = 'none';
+            });
+        }
+
         // 단추 창 모드. 배경화면이 된 다이아를 눌렀을 때 뜨는 창이다.
         // 다이아는 배경화면 쪽에 이미 서 있으니 여기서는 안 그린다.
         const PANEL = /[?&]panel\b/.test(String(location.search || ''));
@@ -3121,6 +3139,7 @@
                     buildRps();
                     loadWardrobe();
                     loadDeco();
+                    applyUiConf();
                     setMood(currentExpression);
                     refreshRelationship();
                 });
