@@ -132,6 +132,18 @@ OPEN_PATHS = {
     "/api/login",
     "/api/signup",
     "/api/whoami",
+
+    # 홈 화면에 얹을 때 쓰는 것 셋.
+    #
+    # **로그인 전에 읽힌다** — 로그인 화면에서 '홈 화면에 추가' 를
+    # 누르는 자리라서다. 막아 두면 302 가 돌아와 앱처럼 열리지 않고
+    # 아이콘도 안 붙는다.
+    #
+    # 여는 것은 이 셋뿐이다. 아바타(static/*.vrm)는 그대로 막힌다 —
+    # 파일 안에 Redistribution_Prohibited 가 박혀 있는 물건이다.
+    "/static/app/manifest.webmanifest",
+    "/static/app/icon-192.png",
+    "/static/app/icon-512.png",
 }
 
 
