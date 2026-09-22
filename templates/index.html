@@ -10756,6 +10756,18 @@
             }
 
 
+            // 오목·할리갈리·장기도 같은 길로 연다.
+            //
+            // 이 길이 없어서 하자고 말해도 판이 안 열리고 모델이 말로만
+            // 받았다. "다시 하자" 처럼 이름을 안 대도 방금 둔 판을 연다.
+            if (
+                handleGameCommand(text)
+            ) {
+
+                return;
+            }
+
+
             // 가위바위보는 모델에게 묻지 않고 바로 단추를 가리킨다
             if (
                 handleRpsCommand(text)
@@ -12121,6 +12133,88 @@
             return (ENTITY && ENTITY.game && ENTITY.game.chess) || {};
         }
 
+        // ------------------------------------------------------------
+        // 말로 놀이 부르기
+        //
+        // 체스만 이 길이 나 있었다. 오목·할리갈리·장기는 하자고 말해도
+        // 아무 데도 안 걸려서 모델이 말로만 받았다 — 사람은 판을 기다리는데
+        // 다이아는 글로 오목을 두려 했다(2026-09-22 에 겪음).
+        //
+        // **이름을 안 대도 받는다.** 지고 나서 "다시 하자" 라고 하는 것이
+        // 사람 말이다. 방금 둔 판을 기억해 두었다가 그것을 연다.
+        // ------------------------------------------------------------
+
+        let lastGame = null;      // 방금 벌인 판
+
+        const GAMES = [
+            { key: 'gomoku', open: 'go-open', panel: 'go-panel', fresh: 'go-new',
+              conf: () => (ENTITY && ENTITY.game || {}).gomoku },
+            { key: 'halli', open: 'hg-open', panel: 'hg-panel', fresh: 'hg-new',
+              conf: () => (ENTITY && ENTITY.game || {}).halli },
+            { key: 'janggi', open: 'jg-open', panel: 'jg-panel', fresh: 'jg-new',
+              conf: () => (ENTITY && ENTITY.game || {}).janggi },
+        ];
+
+        // 이름 없이 다시 하자는 말
+        const AGAIN = ['다시', '또하', '또해', '한판더', '한번더',
+                       '재대결', '리벤지', '한판만더'];
+
+        function gameByName(flat) {
+            for (const g of GAMES) {
+                const list = (g.conf() || {}).triggers || [];
+
+                const hit = list.some(w =>
+                    flat.includes(String(w).replace(/\s+/g, '').toLowerCase()));
+
+                if (hit) return g;
+            }
+
+            return null;
+        }
+
+        function handleGameCommand(text) {
+            const flat = text.replace(/\s+/g, '').toLowerCase();
+
+            let g = gameByName(flat);
+            const again = AGAIN.some(w => flat.includes(w));
+
+            // 이름을 안 댔으면 방금 둔 판으로 본다
+            if (!g && again && lastGame) {
+                if (lastGame === 'chess') {
+                    appendMessage('user', text);
+                    if (isSleeping) wakeUp();
+                    faceUser();
+                    openChess(true);
+                    return true;
+                }
+
+                g = GAMES.find(x => x.key === lastGame) || null;
+            }
+
+            if (!g) return false;
+
+            appendMessage('user', text);
+
+            if (isSleeping) wakeUp();
+            faceUser();
+
+            lastGame = g.key;
+
+            const panel = document.getElementById(g.panel);
+            const on = panel && panel.classList.contains('on');
+
+            if (!on) {
+                // 단추를 누른 것과 같게 연다. 판 불러오기까지 그 길에 다 있다.
+                document.getElementById(g.open).click();
+
+            } else if (again) {
+                // 이미 열려 있는데 다시 하자고 하면 새 판을 깐다
+                document.getElementById(g.fresh).click();
+            }
+
+            return true;
+        }
+
         function handleChessCommand(text) {
             const list = chessCfg().triggers || [];
             if (!list.length) return false;
@@ -12135,6 +12229,9 @@
 
             if (isSleeping) wakeUp();
             faceUser();
+
+            // 방금 둔 판으로 적어 둔다 — 나중에 "다시 하자" 만 해도 알아듣게
+            lastGame = 'chess';
 
             openChess(true);
 
