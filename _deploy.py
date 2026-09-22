@@ -29,6 +29,38 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 SITE = "https://diamondai-six.vercel.app"
 
+
+def _token():
+    """올릴 권한. 없으면 None.
+
+    `vercel login` 으로 해 둔 로그인은 **풀린다.** 실제로 풀려서
+    "No existing credentials found" 로 배포가 막혔다(2026-09-22).
+    그때마다 브라우저를 열어 기기 승인을 하는 대신, 토큰을 한 번
+    적어 두면 그 뒤로는 그냥 올라간다.
+
+    토큰은 vercel.com -> Account Settings -> Tokens 에서 만든다.
+    `.env.local` 에 한 줄 적으면 된다 (이 파일은 안 올라간다 —
+    .vercelignore 와 .gitignore 둘 다 막고 있다):
+
+        VERCEL_TOKEN=<받은 값>
+    """
+
+    if os.environ.get("VERCEL_TOKEN"):
+        return os.environ["VERCEL_TOKEN"].strip()
+
+    env = os.path.join(HERE, ".env.local")
+
+    if not os.path.exists(env):
+        return None
+
+    for line in open(env, encoding="utf-8"):
+        line = line.strip()
+
+        if line.startswith("VERCEL_TOKEN") and "=" in line:
+            return line.split("=", 1)[1].strip().strip('"')
+
+    return None
+
 # 지문을 뜰 파일들. 이것이 바뀌면 사이트도 바뀌어야 한다.
 #
 # 검사 스크립트(_verify_*.py)는 뺀다 — 올리지도 않고, 그것만 고쳤을 때
@@ -108,9 +140,19 @@ def main():
 
     print("이번 판:", want)
     print("올립니다 (캐시를 건너뜁니다)…")
+
+    cmd = "npx -y vercel@latest deploy --yes --prod --force"
+
+    tok = _token()
+
+    if tok:
+        # 토큰은 화면에 안 찍는다. 찍으면 기록에 남는다.
+        print("(적어 둔 토큰으로 올립니다)")
+        cmd += " --token " + tok
+
     print()
 
-    code = run("npx -y vercel@latest deploy --yes --prod --force")
+    code = run(cmd)
 
     print()
     print("올라간 것이 방금 그것인지 봅니다…")
