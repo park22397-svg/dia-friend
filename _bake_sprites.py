@@ -266,6 +266,9 @@ def main():
     ap.add_argument("--h", type=int, default=420, help="한 칸의 높이")
     ap.add_argument("--chibi", type=float, default=1.0,
                     help="머리를 몇 배로. 1.4~1.6 이면 2등신 쪽")
+    ap.add_argument("--warm", type=int, default=2,
+                    help="굽기 전에 몇 바퀴 미리 돌릴 것인가"
+                         " (0 이면 흔들림 없이 뻣뻣하게)")
     ap.add_argument("--turns", default="0",
                     help="몇 도에서 볼 것인가. 쉼표로. 예: 0,90,180")
     ap.add_argument("--code", default="", help="가입 암호(걸려 있으면)")
@@ -385,14 +388,28 @@ def main():
                 paths = []
                 t0 = time.time()
 
-                for i in range(count):
-                    t = min(dur, i * step)
+                # 흔들림을 살려 굽는다.
+                #
+                # **머리카락과 치마는 몸이 움직인 다음에 따라 흔들린다.**
+                # 한 칸씩 따로 세워 찍으면 그 따라옴이 통째로 사라져
+                # 인형처럼 뻣뻣해진다. begin() 이 미리 몇 바퀴 돌려
+                # 리듬에 들인 뒤, next() 가 시간을 이어 흘리며 찍는다.
+                started = br.js("bake.begin('%s', %d, undefined, %d)"
+                                % (key, args.fps, args.warm))
 
-                    url = br.js("bake.frame('%s', %f)" % (key, t))
+                for i in range(count):
+                    if started:
+                        url = br.js("bake.next()")
+                    else:
+                        t = min(dur, i * step)
+                        url = br.js("bake.frame('%s', %f)" % (key, t))
+
                     p = os.path.join(folder, "frame_%03d.png" % i)
 
                     if save_png(url, p):
                         paths.append(p)
+
+                br.js("bake.end()")
 
                 png = name.replace("@", "_at_") + ".png"
 

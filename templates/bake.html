@@ -435,13 +435,30 @@ function setSize(w, h) {
 // 한 칸 굽기
 // ------------------------------------------------------------
 
+// 머리카락·치마 흔들림을 얼마나 흘려 줄 것인가(초).
+// 0 이면 멈춰 세운다(예전 방식).
+let springDt = 0;
+
+// 한 동작을 이어서 굽는 중인가. begin() 이 채우고 next() 가 쓴다.
+const seq = { m: null, t: 0, dt: 0.1, face: undefined };
+
 function shoot() {
     // 옷이 몸을 따라오게. 자세를 준 뒤에 해야 한다.
     syncWear();
 
-    if (vrm && vrm.springBoneManager) {
-        // 머리카락 흔들림은 시간에 기대므로 굽는 동안에는 쓰지 않는다.
-        // 그냥 두면 같은 t 를 두 번 구워도 그림이 달라진다.
+    if (springDt > 0) {
+        // **흔들림을 살린다.** 머리카락과 치마는 몸이 움직인 '다음에'
+        // 따라 흔들리는 것이라, 시간을 흘려 주지 않으면 뻣뻣하게
+        // 붙어 있다. 사람이 아니라 인형처럼 보이는 가장 큰 까닭이었다.
+        try { vrm.update(springDt); } catch (e) {}
+
+        Object.keys(WEAR).forEach(slot => {
+            // 치마는 옷 VRM 이 제 흔들림 뼈를 들고 있다
+            try { WEAR[slot].vrm.update(springDt); } catch (e) {}
+        });
+
+    } else if (vrm && vrm.springBoneManager) {
+        // 멈춰 세우는 길. 같은 t 는 늘 같은 그림이 되지만 뻣뻣하다.
         try { vrm.springBoneManager.reset(); } catch (e) {}
     }
 
@@ -495,6 +512,81 @@ window.bake = {
         if (face !== undefined) setFace(face);
 
         return shoot();
+    },
+
+    // ------------------------------------------------------------
+    // 흔들림을 살려 한 벌 굽기
+    //
+    // 머리카락과 치마는 **몸이 움직인 다음에 따라 흔들린다.** 한 칸씩
+    // 따로 세워 찍으면 그 따라옴이 통째로 사라져 인형처럼 뻣뻣해진다.
+    //
+    // 그래서 굽기 전에 그 동작을 몇 바퀴 미리 돌려(warm) 머리카락이
+    // 그 리듬에 들어가게 한 다음, 한 칸씩 시간을 흘리며 찍는다.
+    // ------------------------------------------------------------
+
+    /** 굽기 시작. 미리 몇 바퀴 돌려 흔들림을 리듬에 들인다. */
+    begin(key, fps, face, warmCycles) {
+        const m = motionByKey(key);
+
+        if (!m) return false;
+
+        seq.m = m;
+        seq.dt = 1 / Math.max(1, fps || 10);
+        seq.t = 0;
+        seq.face = face;
+
+        // 처음 자세로 세우고 흔들림을 멈춘 자리에서 시작한다
+        applyPose(samplePose(m, 0));
+        syncWear();
+
+        try { vrm.springBoneManager.reset(); } catch (e) {}
+
+        Object.keys(WEAR).forEach(slot => {
+            try { WEAR[slot].vrm.springBoneManager.reset(); } catch (e) {}
+        });
+
+        springDt = seq.dt;
+
+        // 미리 돌리기 — 그리지 않고 시간만 흘린다
+        const cycles = (warmCycles === undefined) ? 2 : warmCycles;
+        const steps = Math.round((m.duration * cycles) / seq.dt);
+
+        for (let i = 0; i < steps; i++) {
+            const t = (i * seq.dt) % m.duration;
+
+            applyPose(samplePose(m, t));
+            syncWear();
+
+            try { vrm.update(seq.dt); } catch (e) {}
+
+            Object.keys(WEAR).forEach(slot => {
+                try { WEAR[slot].vrm.update(seq.dt); } catch (e) {}
+            });
+        }
+
+        return true;
+    },
+
+    /** 다음 한 칸. begin() 뒤에 쓴다. */
+    next() {
+        if (!seq.m) return null;
+
+        const t = Math.min(seq.t, seq.m.duration);
+
+        applyPose(samplePose(seq.m, t));
+
+        if (seq.face !== undefined) setFace(seq.face);
+
+        seq.t += seq.dt;
+
+        return shoot();
+    },
+
+    /** 흔들림을 멈춰 세우고 굽던 것을 끝낸다. */
+    end() {
+        seq.m = null;
+        springDt = 0;
+        return true;
     },
 
     /** 가만히 선 자세 한 장 (동작 없이) */
