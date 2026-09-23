@@ -3392,6 +3392,15 @@
                 + Object.keys(morphSlots).length + '개');
         }
 
+        // 말하는 동안 그룹 대신 얹은 조각(part)이 받은 값.
+        // 같은 조각을 배합기도 쓰면 둘을 더해야 해서 필요하다.
+        function shapeOfPart(part, shapes, toParts) {
+            for (const g of Object.keys(shapes)) {
+                if ((toParts[g] || []).indexOf(part) >= 0) return shapes[g];
+            }
+            return null;
+        }
+
         function setMorph(name, value) {
             const slots = morphSlots[name];
             if (!slots) return false;
@@ -6796,6 +6805,18 @@
         // 눈 상태
         // ============================================================
 
+        // 눈을 끝까지 감는 값.
+        //
+        // 1.0 으로 감으면 이 아바타는 윗눈꺼풀과 아랫눈꺼풀이 겹쳐
+        // 찌그러진다. 그래서 배합기에서 '눈 감기' 를 맞춰 둔 값을
+        // 깜빡임·잠들기·처음 뜰 때가 다 같이 쓴다.
+        // 배합기에서 눈 감기를 고치면 여기도 따라간다.
+        function eyeCloseMax() {
+            const s = entityShapesFor('eyes_closed');
+            const v = s && s.blink;
+            return (typeof v === 'number' && v > 0) ? v : 1.0;
+        }
+
         function setEyeState(close) {
 
             if (
@@ -6817,7 +6838,7 @@
 
                 currentVRM.blendShapeProxy.setValue(
                     presetName,
-                    close ? 1.0 : 0.0
+                    close ? eyeCloseMax() : 0.0
                 );
 
                 currentVRM.blendShapeProxy.update();
@@ -6980,6 +7001,13 @@
                 speakMorphs.forEach(n => setMorph(n, 0));
                 speakMorphs.clear();
 
+                // 부위별 모프도 여기서 먼저 걷는다.
+                //
+                // 아래에서 그룹을 눈·눈썹 조각으로 바꿔 얹은 뒤에 걷으면,
+                // 배합기가 같은 조각(Fcl_EYE_Fun)을 쓴 표정에서 방금 얹은
+                // 눈까지 0 이 된다. 그러면 말할 때만 눈이 덜 웃어 커 보인다.
+                clearMorphs();
+
                 // 표정 수치는 이 파일이 정하지 않는다. 개체가 정한다.
                 const shapes = entityShapesFor(expression) || {};
                 Object.keys(shapes).forEach(name => {
@@ -6998,12 +7026,17 @@
                 });
 
                 // 부위별 모프도 개체가 정한 대로 얹는다
-                clearMorphs();
                 const morphs = entityMorphsFor(expression) || {};
                 Object.keys(morphs).forEach(n => {
                     // 말하는 중이면 입을 건드리는 조각은 빼둔다
                     if (talking && mouthPre.some(p => n.indexOf(p) === 0)) return;
-                    setMorph(n, morphs[n]);
+
+                    // 그룹을 바꿔 얹은 조각과 같으면 덮지 않고 더한다.
+                    // 평소에는 그룹(ALL_Fun)의 눈 몫 위에 이 조각이 더해져
+                    // 보이므로, 말할 때도 같은 합이어야 얼굴이 안 바뀐다.
+                    const base = speakMorphs.has(n)
+                        ? (shapeOfPart(n, shapes, toParts) || 0) : 0;
+                    setMorph(n, base + morphs[n]);
                 });
 
                 // 단계에 붙어 있는 얼굴은 표정과 상관없이 늘 걸린다.
@@ -8625,7 +8658,8 @@
                                     .blendShapeProxy
                                     .setValue(
                                         blinkPreset,
-                                        blinkValue
+                                        // 끝까지 감으면 눈꺼풀이 겹친다
+                                        blinkValue * eyeCloseMax()
                                     );
 
 
