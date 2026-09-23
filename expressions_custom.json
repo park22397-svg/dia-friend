@@ -1,0 +1,55 @@
+{
+  "eyes_closed": {
+    "label": "눈 감기",
+    "when": "상대를 받아들일 때 — 괜찮다고, 알겠다고 하는 말. 또는 가슴 깊은 데 있던 진심을 꺼낼 때. 눈을 감으면 상대가 보이지 않으니 꾸미지 않는다는 표시가 된다.",
+    "blendshapes": {
+      "blink": 0.75
+    },
+    "morphs": {},
+    "hold_ms": 2600
+  },
+  "joy": {
+    "label": "기쁨",
+    "when": "소리 내어 웃을 때. 재미있거나 신날 때, 장난칠 때. 잔잔한 미소로는 모자란 순간이다.",
+    "blendshapes": {
+      "joy": 0.7
+    },
+    "morphs": {
+      "Fcl_MTH_Joy": 0.28
+    },
+    "hold_ms": 3000
+  },
+  "fun": {
+    "label": "즐거움",
+    "when": "평소의 미소. 반갑고 다정할 때, 마음이 놓일 때. 크게 웃는 것이 아니라 잔잔히 번지는 얼굴이다.",
+    "blendshapes": {
+      "fun": 0.3
+    },
+    "morphs": {
+      "Fcl_EYE_Fun": 1.0,
+      "Fcl_MTH_Joy": 0.22,
+      "Fcl_MTH_Fun": 0.23
+    },
+    "hold_ms": 3000
+  },
+  "wink": {
+    "label": "윙크",
+    "when": "둘만 아는 것을 말할 때. 농담이나 장난을 던지고 '알지?' 하고 넘길 때. 짓궂지만 미움받지 않는 얼굴이다.",
+    "blendshapes": {
+      "blink_l": 0.75,
+      "blink_r": 0.22
+    },
+    "morphs": {},
+    "hold_ms": 1200
+  },
+  "wink_r": {
+    "label": "반대쪽 윙크",
+    "when": "",
+    "blendshapes": {
+      "blink_l": 0.22,
+      "blink_r": 0.75
+    },
+    "morphs": {},
+    "hold_ms": 1200
+  }
+}
