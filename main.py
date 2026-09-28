@@ -282,6 +282,8 @@ def health_api():
         "build": build,
         "avatar": has("static/avatar.vrm"),
         "body": has("static/body.vrm"),
+        # 짐에 실제로 실린 옷 벌 수. 한글 이름 옷이 빠져 0 이었던 적이 있다.
+        "wardrobe": len(_wardrobe_items()),
         "store": store.backend(),
         "model_set": bool((store.read_json(config.RUNTIME_KEY) or {})
                           .get("ollama_url")),
