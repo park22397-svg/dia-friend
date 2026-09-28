@@ -108,6 +108,18 @@ for text, want in [
 
 
 print()
+print("화면이 놀이 부르는 말을 받는가")
+
+# 화면은 ENTITY.game.<놀이>.triggers 로 "끝말잇기 하자" 를 알아듣는다.
+# 예전에는 rps 만 넘겨서 말로 부른 놀이가 전부 모델에게 갔다.
+game = AVATAR.to_dict().get("game", {})
+for k in ("chess", "gomoku", "halli", "janggi", "word_chain"):
+    ok(bool((game.get(k) or {}).get("triggers")), f"{k} 부르는 말이 화면에 간다",
+       list(game))
+ok((game.get("again") or {}).get("ttl_sec"), "한 판 더 기다림이 화면에 간다")
+
+
+print()
 print("선공 가위바위보")
 
 with app.test_client() as c:

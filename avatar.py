@@ -3354,6 +3354,18 @@ class VirtualAvatar:
                     },
                     "reveal_t": self.rps().get("reveal_t", 1.35),
                 },
+
+                # 말로 놀이를 부르는 낱말. 화면이 이것으로 "오목 하자" ·
+                # "끝말잇기 하자" 를 알아듣고 판(과 선공 가위바위보)을 연다.
+                #
+                # 예전에는 rps 만 넘겨서 화면의 트리거 목록이 전부 비어 있었다.
+                # 그래서 말로 부른 놀이는 판이 안 열리고 모델에게 갔다 —
+                # 끝말잇기는 서버가 가위바위보 없이 다이아부터 시작했다.
+                **{k: {"triggers": (self.game.get(k) or {}).get("triggers", [])}
+                   for k in ("chess", "gomoku", "halli", "janggi", "word_chain")},
+
+                # 한 판 더 — 물은 뒤 얼마 동안 답을 기다리는가
+                "again": {"ttl_sec": self.again_conf().get("ttl_sec", 600)},
             },
             "touch": {
                 "head_split": self.touch.get("head_split", {}),
