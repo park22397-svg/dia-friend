@@ -14,9 +14,12 @@ _cue_log.txt
 
 # 아바타 파일.
 #
-# 파일 안에 라이선스가 Redistribution_Prohibited 로 박혀 있다.
-# 공개 저장소에 두는 것은 재배포다. 쓰려면 직접 넣어야 한다.
+# 웹이 쓰는 것은 avatar.vrm 하나다(겹치기가 꺼져 있어 body.vrm 은 안 쓴다).
+# 2026-09-28 에 만든이(본인)가 라이선스를 CC_BY_NC 로 바꿔서 이것만 올린다
+# (_relicense_vrm.py). 나머지 VRM 은 아직 Redistribution_Prohibited 거나
+# 안 쓰는 판이라 그대로 뺀다.
 static/*.vrm
+!static/avatar.vrm
 static/skin/*.png
 
 # 배경 이미지 (개인 파일)
@@ -67,13 +70,11 @@ build.json
 # 만들어 둔 목소리. 다시 만들 수 있는 것이라 안 올린다.
 _voice_cache/
 
-# 옷장에 구운 옷도 아바타에서 떼어 낸 것이다.
+# 옷장에 구운 옷(wardrobe/*.vrm)은 올린다.
 #
-# `static/*.vrm` 은 한 칸 아래인 wardrobe/ 를 못 덮는다(* 는 / 를 안 넘는다).
-# 안 적어 두면 교복.vrm 이 그대로 공개 저장소로 올라간다 — 원본에
-# Redistribution_Prohibited 가 박힌 물건에서 뽑은 것이라 그러면 안 된다.
-# 옷장 목록(wardrobe.json)은 모델이 아니라 표라서 올린다.
-static/wardrobe/*.vrm
+# 아바타에서 떼어 낸 것이라 예전엔 막았는데, 2026-09-28 에 avatar.vrm 과
+# 함께 CC_BY_NC 로 바꿨다. 새 옷을 구우면 원본이 재배포 허용인지 먼저 볼 것
+# — 굽는 도구는 원본의 라이선스를 그대로 옮긴다.
 
 # 옷장에 넣으려고 떨군 원본 VRM 도 아바타에서 나온 것이다.
 # 구운 옷과 같은 이유로 저장소에 안 올린다.

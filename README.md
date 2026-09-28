@@ -25,15 +25,13 @@ pip install -r requirements.txt
 
 넘기는 문서는 [선생님께.md](선생님께.md) 에 따로 있다.
 
-### 따로 넣어야 하는 것
+### 아바타
 
-| 파일 | 무엇 |
-|---|---|
-| `static/avatar.vrm` | 옷 입은 아바타 |
-| `static/body.vrm` | 옷 아래 몸 (옷을 당길 때 비침 방지) |
+`static/avatar.vrm`(맨몸 바탕)과 옷장 `static/wardrobe/*.vrm` 은 **저장소에 들어 있다.**
+받으면 그대로 다이아가 나온다. 라이선스는 CC_BY_NC(만든이 표시 · 상업 이용 금지)다
+— 2026-09-28 에 만든이가 `Redistribution_Prohibited` 에서 바꿨다(`_relicense_vrm.py`).
 
-두 파일은 라이선스가 `Redistribution_Prohibited` 라 저장소에 없다.
-`body.vrm` 이 없으면 `avatar.py` 의 `model["layered"]` 를 `False` 로 둔다.
+`static/body.vrm` 은 겹치기(`model["layered"]`)용인데 지금은 꺼져 있어 없어도 된다.
 
 `config.py` 의 `OLLAMA_URL` 과 `OLLAMA_MODEL` 을 쓰는 서버에 맞춘다.
 
@@ -55,7 +53,7 @@ npx vercel deploy --prod
 |---|---|
 | `SECRET_KEY` | 기계가 바뀔 때마다 모두 로그아웃된다 (`python -c "import secrets;print(secrets.token_hex(32))"`) |
 | `SIGNUP_CODE` | 주소를 아는 사람은 누구나 계정을 만든다 |
-| `VRM_URL` | **아바타가 안 나온다.** 파일이 `Redistribution_Prohibited` 라 짐에 못 싣는다 |
+| `VRM_URL` | 짐에 실린 `/static/avatar.vrm` 을 쓴다 |
 
 #### 모델 서버에 닿게 하기
 
