@@ -275,6 +275,15 @@ def load_memory_data():
     if not isinstance(look, dict):
         look = {}
 
+    # 선공을 정하는 중인 가위바위보 — 오목·장기·할리갈리·끝말잇기.
+    #
+    # 같은 함정이다. 여기 안 적으면 "가위바위보로 정하자" 하고 손을
+    # 내는 순간 정하던 것이 지워져서 "낼 때가 아닙니다" 가 나온다.
+    first = data.get("first", {})
+
+    if not isinstance(first, dict):
+        first = {}
+
     # 지금이 어떤 자리인가 — 노래방인가, 사진 찍는 중인가.
     #
     # **장소·옷과 똑같은 함정에 걸린다.** 이 함수가 아는 항목만 골라
@@ -316,6 +325,7 @@ def load_memory_data():
         "gomoku": stones,
         "halli": bells,
         "janggi": jg,
+        "first": first,
     }
 
 
