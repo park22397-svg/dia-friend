@@ -874,6 +874,24 @@ def touch_api():
                     and zone.key == kc.get("zone")):
                 kind = "kiss"
 
+        # 만진 자리와 사이로 반응을 정한다.
+        #
+        # 이 줄이 2026-09-16(307253a)에 벗기기 쪽과 같이 지워져서, 그 뒤로
+        # 만질 때마다 아래에서 'result' 가 없다고 500 이 났다. 화면은 경고만
+        # 찍고 아무 반응도 안 해서 터치가 사라진 것처럼 보였다(2026-09-28).
+        # 입맞춤 판정 뒤라야 kind 가 "kiss" 로 바뀐 것이 반영된다.
+        result = AVATAR.touch_reaction(
+            zone,
+            kind,
+            stage,
+            affinity,
+            count=count,
+            tool=tool,
+        )
+
+        if result is None:
+            return jsonify({"hit": False, "bone": bone})
+
         # 기분을 풀거나 상하게 한다.
         #
         # 쓰다듬으면 풀리고, 아직 허락 안 된 곳을 만지면 더 상한다.
