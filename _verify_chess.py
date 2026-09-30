@@ -64,6 +64,24 @@ def signup(c, who):
         "id": who, "password": "pw1234", "again": "pw1234"}).get_json()
 
 
+def open_board(c, **body):
+    """선공 가위바위보를 사람이 이길 때까지 해서 판을 연다.
+
+    /api/chess/new 는 가위바위보를 이겨 고를 차례일 때만 열린다.
+    다이아가 이기면 다이아가 선공으로 판이 열리므로 처음부터 다시 한다.
+    """
+    for _ in range(200):
+        c.post("/api/chess/start", json={})
+        r = {}
+        for _ in range(30):
+            r = c.post("/api/chess/rps", json={"hand": "rock"}).get_json()
+            if r.get("choose") or r.get("playing"):
+                break
+        if r.get("choose"):
+            return c.post("/api/chess/new", json=body).get_json()
+    raise RuntimeError("가위바위보를 한 번도 못 이겼다")
+
+
 print("판 열기")
 
 with app.test_client() as c:
@@ -72,7 +90,7 @@ with app.test_client() as c:
     r = c.get("/api/chess/state").get_json()
     ok(r["playing"] is False, "처음에는 두던 판이 없다", r)
 
-    r = c.post("/api/chess/new", json={}).get_json()
+    r = open_board(c)
     ok(r["ok"] and r["playing"], "판이 열린다", r)
     ok(r["dia"] == "black" and r["you"] == "white",
        "다이아가 검은 쪽, 사람이 흰 쪽", (r.get("dia"), r.get("you")))
@@ -93,7 +111,7 @@ print("두기")
 
 with app.test_client() as c:
     signup(c, "mover")
-    c.post("/api/chess/new", json={})
+    open_board(c)
 
     r = c.post("/api/chess/move", json={"move": "e2e5"}).get_json()
     ok(r["ok"] is False, "못 두는 수를 막는다", r)
@@ -121,7 +139,7 @@ print("사람마다 따로인가")
 
 with app.test_client() as a:
     signup(a, "alice2")
-    a.post("/api/chess/new", json={})
+    open_board(a)
     a.post("/api/chess/move", json={"move": "d2d4"})
     fen_a = a.get("/api/chess/state").get_json()["fen"]
 
@@ -130,7 +148,7 @@ with app.test_client() as b2:
     r = b2.get("/api/chess/state").get_json()
     ok(r["playing"] is False, "남의 판이 안 보인다", r)
 
-    b2.post("/api/chess/new", json={})
+    open_board(b2)
     fen_b = b2.get("/api/chess/state").get_json()["fen"]
     ok(fen_a != fen_b, "두 사람의 판이 다르다")
 
@@ -142,7 +160,7 @@ with app.test_client() as c:
     signup(c, "mater")
 
     # 바보 메이트. 사람(흰 쪽)이 두 수 만에 진다.
-    c.post("/api/chess/new", json={})
+    open_board(c)
 
     # 다이아가 어떻게 두든 상관없이 결과를 보려면 판을 직접 놓는다.
     import who
@@ -241,23 +259,25 @@ print("어느 말을 잡을까")
 with app.test_client() as c:
     signup(c, "sidepick")
 
-    r = c.post("/api/chess/new", json={"you": "white"}).get_json()
+    r = open_board(c, you="white")
     ok(r.get("you") == "white" and r.get("dia") == "black",
        "흰 말을 고르면 다이아가 검은 쪽", (r.get("you"), r.get("dia")))
     ok(r.get("turn") == "white" and not r.get("dia_move"),
        "흰 말이면 내가 먼저 둔다", r.get("turn"))
 
-    r = c.post("/api/chess/new", json={"you": "black"}).get_json()
+    r = open_board(c, you="black")
     ok(r.get("you") == "black" and r.get("dia") == "white",
        "검은 말을 고르면 다이아가 흰 쪽", (r.get("you"), r.get("dia")))
     ok(bool(r.get("dia_move")), "검은 말이면 다이아가 먼저 둔다",
        r.get("dia_move"))
     ok(r.get("turn") == "black", "그다음이 내 차례", r.get("turn"))
 
-    # 고른 색은 새 판에도 남는다
-    r = c.post("/api/chess/new", json={}).get_json()
-    ok(r.get("you") == "black", "안 적어 보내면 고른 색 그대로",
-       r.get("you"))
+    # 가위바위보 없이 새 판을 열 수는 없다
+    r = c.post("/api/chess/new", json={"you": "white"}).get_json()
+    ok(r.get("ok") is False and r.get("need_first"),
+       "가위바위보 없이는 새 판이 안 열린다", r)
+    r = c.get("/api/chess/state").get_json()
+    ok(r.get("you") == "black", "막혀도 두던 판은 그대로", r.get("you"))
 
     # 검은 말로 실제로 둘 수 있는가
     r = c.post("/api/chess/move", json={"move": "e7e5"}).get_json()
@@ -346,7 +366,7 @@ print("난이도가 판과 함께 남는가")
 
 with app.test_client() as c:
     signup(c, "levelkeep")
-    r = c.post("/api/chess/new", json={"level": "easy"}).get_json()
+    r = open_board(c, level="easy")
     ok(r.get("level") == "easy", "새 판에 난이도를 정한다", r.get("level"))
 
     r = c.get("/api/chess/state").get_json()
@@ -369,7 +389,7 @@ with app.test_client() as c:
 
     ok(AVATAR.chess_note(None) is None, "둘 판이 없으면 알려줄 것도 없다")
 
-    c.post("/api/chess/new", json={"level": "easy"})
+    open_board(c, level="easy")
     c.post("/api/chess/move", json={"move": "e2e4"})
 
     import who as _who
