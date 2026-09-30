@@ -70,12 +70,24 @@ GIVEN = {
 
 
 def script_of(html):
-    """<script> 안쪽만. src 로 불러오는 것은 우리 글이 아니다."""
+    """<script> 안쪽과, src 로 불러오는 **우리 파일**(/static/*.js).
+
+    남의 것(unpkg 등)은 우리 글이 아니라 뺀다. 우리 파일을 안 읽으면
+    화면 스크립트를 static/js 로 나눈 뒤로 검사할 글이 거의 없어
+    헛통과한다(2026-09-30).
+    """
 
     out = []
 
     for m in re.finditer(r"<script\b([^>]*)>(.*?)</script>", html,
                          re.S | re.I):
+        src = re.search(r'src="(/static/[^"?]+\.js)', m.group(1))
+        if src:
+            f = os.path.join(HERE, src.group(1).lstrip("/").replace("/", os.sep))
+            if os.path.isfile(f):
+                with open(f, encoding="utf-8") as fh:
+                    out.append(fh.read())
+            continue
         if "src=" in m.group(1):
             continue
         out.append(m.group(2))
@@ -154,6 +166,12 @@ def declared(src):
 
     # class 이름
     names |= set(re.findall(r"\bclass\s+([A-Za-z_$][\w$]*)", src))
+
+    # class 안의 메서드 정의 — 줄 첫머리의 `이름(...) {`.
+    # static/singer.js 처럼 클래스로 된 우리 파일도 읽게 되면서, 정의를
+    # 부름으로 세어 멀쩡한 것을 죽었다고 했다(2026-09-30).
+    names |= set(re.findall(
+        r"(?m)^\s*(?:static\s+|async\s+)*([A-Za-z_$][\w$]*)\s*\([^()]*\)\s*\{", src))
 
     # 넘겨받는 이름들.
     #

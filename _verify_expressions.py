@@ -84,16 +84,24 @@ def main():
             fails.append(f"{e.label}({key}): 파일 그대로가 아니다 — {e.blendshapes} {e.morphs}")
 
     # 부르는 자리
-    src = open(os.path.join(HERE, "avatar.py"), encoding="utf-8").read()
-    src += open(os.path.join(HERE, "main.py"), encoding="utf-8").read()
+    # 놀이(system/games)도 다이아의 표정을 부른다 — 2026-09-30 에 옮겨 갔다
+    import glob as _glob
+    py = ["avatar.py", "main.py"] + sorted(_glob.glob(os.path.join(HERE, "system", "**", "*.py"),
+                                                    recursive=True))
+    src = ""
+    for f in py:
+        src += open(os.path.join(HERE, f), encoding="utf-8").read()
     called = set(re.findall(r'expression"\s*:\s*"([a-z_]+)"', src))
     called |= set(re.findall(r'expression="([a-z_]+)"', src))
     for k in sorted(called - keys):
         fails.append(f"없는 표정 '{k}' 을 부르는 자리가 있다")
 
+    # 화면: index.html 과, 거기서 나눠 낸 static/js
     html = open(os.path.join(HERE, "templates", "index.html"), encoding="utf-8").read()
+    for f in sorted(_glob.glob(os.path.join(HERE, "static", "js", "**", "*.js"), recursive=True)):
+        html += open(f, encoding="utf-8").read()
     for k in sorted(set(re.findall(r"applyExpression\('([a-z_]+)'\)", html)) - keys):
-        fails.append(f"index.html 이 없는 표정 '{k}' 을 부른다")
+        fails.append(f"화면이 없는 표정 '{k}' 을 부른다")
 
     if _EXPR_ORIGINAL:
         print(f"\n배합기에서 만들거나 고친 표정 {len(_EXPR_ORIGINAL)}개")

@@ -397,10 +397,29 @@ def logout_api():
 # 메인 페이지
 # ============================================================
 
+def _js_ver():
+    """화면 스크립트(static/js)의 지문. 파일을 고치면 바뀐다.
+
+    스크립트를 파일로 나눈 뒤로는 브라우저가 옛 파일을 붙들고 있을 수
+    있어서, 주소 끝에 ?v= 로 붙여 고친 것이 바로 가게 한다.
+    """
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        "static", "js")
+    newest = 0
+
+    for dirpath, _dirs, names in os.walk(root):
+        for n in names:
+            if n.endswith(".js"):
+                newest = max(newest, os.path.getmtime(os.path.join(dirpath, n)))
+
+    return str(int(newest))
+
+
 @app.route("/")
 def index():
     return render_template(
-        "index.html"
+        "index.html",
+        js_ver=_js_ver(),
     )
 
 

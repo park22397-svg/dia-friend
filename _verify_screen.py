@@ -28,7 +28,10 @@ PAGES = ["templates/index.html", "templates/test.html",
 STUB = r"""
 const fs = require('fs');
 const vm = require('vm');
-const src = fs.readFileSync(process.argv[2], 'utf8');
+// 파일을 여럿 받으면 **하나씩 따로** 돌린다. 브라우저가 <script> 를 하나씩
+// 돌리는 것과 같다 — 전역(const·let 포함)은 함께 쓰지만, 함수 끌어올리기는
+// 그 파일 안에서만 된다. 이어 붙여 돌리면 이 차이를 못 잡는다.
+const files = process.argv.slice(2);
 
 function fake(name) {
   const f = function () { return proxy; };
@@ -78,13 +81,18 @@ sandbox.location = fake('loc');
 sandbox.window = sandbox;
 sandbox.globalThis = sandbox;
 
-try {
-  vm.runInNewContext(src + '\n;__done();', sandbox, { timeout: 20000 });
-} catch (e) {
-  const at = (e.stack || '').split('\n').slice(1, 3).join(' / ');
-  console.log('STOP ' + e.name + ': ' + e.message + ' | ' + at);
-  process.exit(1);
+const ctx = vm.createContext(sandbox);
+for (const f of files) {
+  try {
+    vm.runInContext(fs.readFileSync(f, 'utf8'), ctx,
+                    { filename: f, timeout: 20000 });
+  } catch (e) {
+    const at = (e.stack || '').split('\n').slice(1, 3).join(' / ');
+    console.log('STOP ' + e.name + ': ' + e.message + ' | ' + at);
+    process.exit(1);
+  }
 }
+vm.runInContext('__done();', ctx);
 process.exit(reached ? 0 : 1);
 """
 
@@ -100,34 +108,19 @@ def scripts_in(path):
     import re
 
     text = io.open(path, encoding="utf-8").read()
-    lines = text.split("\n")
 
-    ours = []
+    # 쪽에 나온 차례대로 (이름, 코드). 그 차례가 곧 브라우저가 돌리는 차례다.
+    out = []
 
-    for m in re.finditer(r'<script[^>]*src="(/static/[^"]+\.js)"', text):
-        f = os.path.join(HERE, m.group(1).lstrip("/").replace("/", os.sep))
-        if os.path.isfile(f):
-            ours.append(io.open(f, encoding="utf-8").read())
-
-    out, buf, on = [], [], False
-
-    for line in lines:
-        t = line.strip()
-        if not on and t == "<script>":
-            on, buf = True, []
-            continue
-        if on and "</script>" in t:
-            on = False
-            out.append("\n".join(buf))
-            continue
-        if on:
-            buf.append(line)
-
-    # 우리 것을 앞에 붙인다. 화면이 그것을 먼저 읽기 때문이다.
-    if ours and out:
-        out[0] = "\n".join(ours) + "\n" + out[0]
-    elif ours:
-        out = ours
+    for m in re.finditer(
+            r'<script[^>]*src="(/static/[^"?]+\.js)(?:\?[^"]*)?"[^>]*>\s*</script>'
+            r'|<script>(.*?)</script>', text, flags=re.S):
+        if m.group(1):
+            f = os.path.join(HERE, m.group(1).lstrip("/").replace("/", os.sep))
+            if os.path.isfile(f):
+                out.append((m.group(1), io.open(f, encoding="utf-8").read()))
+        else:
+            out.append(("(안쪽 스크립트)", m.group(2)))
 
     return out
 
@@ -155,23 +148,28 @@ def main():
             print(f"  건너뜀  {rel}  (안쪽 스크립트 없음)")
             continue
 
-        for i, code in enumerate(chunks):
-            js = os.path.join(tmp, f"c{i}.js")
+        # 한 쪽의 스크립트는 한 자리(전역)에서 차례대로 돈다
+        paths = []
+        for i, (name, code) in enumerate(chunks):
+            js = os.path.join(tmp, f"{os.path.basename(rel)}.{i:02d}."
+                                   + os.path.basename(name).replace("(", "").replace(")", "")
+                                   .replace(" ", "_") + ("" if name.endswith(".js") else ".js"))
             with open(js, "w", encoding="utf-8") as f:
                 f.write(code)
+            paths.append(js)
 
-            r = subprocess.run([node, stub, js],
-                               capture_output=True, text=True, timeout=60)
+        r = subprocess.run([node, stub] + paths,
+                           capture_output=True, text=True, timeout=120)
 
-            tag = rel if len(chunks) == 1 else f"{rel} [{i + 1}]"
+        total = sum(len(code.splitlines()) for _n, code in chunks)
 
-            if r.returncode == 0:
-                print(f"  PASS  {tag}  ({len(code.splitlines())}줄, 끝까지 갔다)")
-            else:
-                fails += 1
-                print(f"  FAIL  {tag}")
-                for line in (r.stdout or r.stderr).strip().split("\n")[:3]:
-                    print(f"        {line}")
+        if r.returncode == 0:
+            print(f"  PASS  {rel}  (스크립트 {len(chunks)}개 · {total}줄, 끝까지 갔다)")
+        else:
+            fails += 1
+            print(f"  FAIL  {rel}")
+            for line in (r.stdout or r.stderr).strip().split("\n")[:3]:
+                print(f"        {line}")
 
     shutil.rmtree(tmp, ignore_errors=True)
 
@@ -197,6 +195,11 @@ def no_wake_surprise():
     banned = ("surprise_upto", "wake_surprise", "wakeMs")
 
     look = ["avatar.py"] + PAGES
+    # 화면 스크립트를 파일로 나눈 뒤로는 거기도 본다
+    for dirpath, _d, names in os.walk(os.path.join(HERE, "static", "js")):
+        for n in names:
+            if n.endswith(".js"):
+                look.append(os.path.relpath(os.path.join(dirpath, n), HERE))
     bad = []
 
     for rel in look:
