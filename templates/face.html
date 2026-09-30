@@ -336,10 +336,13 @@ function applyMix() {
     groupNames.forEach(n => { try { proxy.setValue(n, 0); } catch (e) {} });
     Object.keys(morphSlots).forEach(n => setMorph(n, 0));
 
+    // 그룹 대신 얹은 조각이 받은 값. 같은 조각을 배합에서도 쓰면 더한다 —
+    // 채팅 화면(applyExpression)과 같아야 여기서 본 얼굴이 거기서도 나온다.
+    const partVal = {};
     Object.keys(mix.groups).forEach(n => {
         const v = mix.groups[n];
         if (talking && toParts[n]) {
-            toParts[n].forEach(m => setMorph(m, v));
+            toParts[n].forEach(m => { setMorph(m, v); partVal[m] = v; });
             return;
         }
         try { proxy.setValue(n, v); } catch (e) {}
@@ -347,7 +350,7 @@ function applyMix() {
 
     Object.keys(mix.morphs).forEach(n => {
         if (talking && mouthPre.some(p => n.indexOf(p) === 0)) return;
-        setMorph(n, mix.morphs[n]);
+        setMorph(n, (partVal[n] || 0) + mix.morphs[n]);
     });
 
     proxy.update();

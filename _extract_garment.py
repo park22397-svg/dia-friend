@@ -511,7 +511,7 @@ def extract(outfit_path, base_path, name, outdir, verbose=True,
         gltf['skins'] = new_skins
 
     os.makedirs(outdir, exist_ok=True)
-    out = os.path.join(outdir, name + '.vrm')
+    out = os.path.join(outdir, file_stem(name) + '.vrm')
     size = write_glb(out, gltf, b.blob)
     say('\n구웠다: %s  (%.2f MB)' % (out, size / 1024 / 1024))
 
@@ -536,6 +536,21 @@ def extract(outfit_path, base_path, name, outdir, verbose=True,
         entry['hide'] = body_mask(base_path, outfit_path, say)
 
     return entry
+
+
+def file_stem(name):
+    """옷 파일 이름. 옷 이름(key·label)은 한글 그대로 두고 파일만 영문으로.
+
+    파일 이름이 한글이면 Vercel 짐에 안 실린다(.vercelignore 의 표현용.vrm
+    이야기와 같다). 교복.vrm 이 그렇게 빠져서 올린 데서는 옷장이 비고
+    처음부터 속옷 차림이었다. 같은 이름은 늘 같은 파일이 되게 해시로 짓는다.
+    """
+    import hashlib
+    import re
+
+    if re.fullmatch(r'[A-Za-z0-9_.-]+', name):
+        return name
+    return 'w_' + hashlib.sha1(name.encode('utf-8')).hexdigest()[:10]
 
 
 def push_out_of_body(pos, keep, body_pos, body_idx, from_y, margin=0.003,

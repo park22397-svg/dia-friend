@@ -282,6 +282,8 @@ def health_api():
         "build": build,
         "avatar": has("static/avatar.vrm"),
         "body": has("static/body.vrm"),
+        # 짐에 실제로 실린 옷 벌 수. 한글 이름 옷이 빠져 0 이었던 적이 있다.
+        "wardrobe": len(_wardrobe_items()),
         "store": store.backend(),
         "model_set": bool((store.read_json(config.RUNTIME_KEY) or {})
                           .get("ollama_url")),
@@ -458,6 +460,13 @@ def chat_api():
                 }
             ), 400
 
+        # 끝말잇기가 이 말로 끝났는지 보려고 앞뒤를 잰다
+        try:
+            from ai_brain import _wc_load
+            wc_was = bool(_wc_load().get("on"))
+        except Exception:
+            wc_was = False
+
         # 카메라가 켜져 있으면 화면이 '지금 보이는 것' 을 같이 보낸다.
         # 그러면 말을 걸 때마다 다이아가 상대를 보면서 답한다.
         result = process_chat(
@@ -469,6 +478,22 @@ def chat_api():
 
         # 답에 (배경: 공원) · (옷: 교복) 이 섞여 있으면 실제로 옮기고 갈아입는다
         result = _apply_shoot(_apply_song(_apply_wear(_apply_place(result))))
+
+        # 끝말잇기 판이 켜져 있는지 화면에 알린다. 화면은 이것을 보고
+        # "끝말잇기 하자" 를 선공 가위바위보로 받을지 정한다.
+        #
+        # 이 말로 판이 끝났으면(그만하자고 한 것이 아니라 승부가 났으면)
+        # 한 판 더 할지 묻는다.
+        try:
+            wc_now = bool(_wc_load().get("on"))
+            result["word_chain_on"] = wc_now
+
+            if (wc_was and not wc_now
+                    and not AVATAR.wc_stop(user_text)
+                    and isinstance(result.get("reply"), str)):
+                _log_line("assistant", _again(result, "word_chain"))
+        except Exception as e:
+            print(f"[끝말잇기 한 판 더 오류]: {e}")
 
         return jsonify(
             result
@@ -848,6 +873,24 @@ def touch_api():
                     and tool.key == kc.get("tool")
                     and zone.key == kc.get("zone")):
                 kind = "kiss"
+
+        # 만진 자리와 사이로 반응을 정한다.
+        #
+        # 이 줄이 2026-09-16(307253a)에 벗기기 쪽과 같이 지워져서, 그 뒤로
+        # 만질 때마다 아래에서 'result' 가 없다고 500 이 났다. 화면은 경고만
+        # 찍고 아무 반응도 안 해서 터치가 사라진 것처럼 보였다(2026-09-28).
+        # 입맞춤 판정 뒤라야 kind 가 "kiss" 로 바뀐 것이 반영된다.
+        result = AVATAR.touch_reaction(
+            zone,
+            kind,
+            stage,
+            affinity,
+            count=count,
+            tool=tool,
+        )
+
+        if result is None:
+            return jsonify({"hit": False, "bone": bone})
 
         # 기분을 풀거나 상하게 한다.
         #
@@ -1879,6 +1922,14 @@ def _jg_out(board, say=None, extra=None):
     return out
 
 
+def _jg_end(board, say, extra):
+    """끝난 판의 답. 한 판 더 할지 같이 묻는다."""
+    out = _jg_out(board, say, extra)
+    _again(out, "janggi")
+
+    return out
+
+
 @app.route("/api/janggi/state")
 def janggi_state_api():
     g = _jg_load()
@@ -1893,48 +1944,42 @@ def janggi_state_api():
     return jsonify(out)
 
 
-def _jg_open(first, level=None, say=None):
-    """판을 펼친다. first 가 'dia' 면 다이아가 첫 수를 두고 넘긴다."""
-    import janggi as JG
-
-    board = JG.new_board()
-    level = level or (memory_manager.load_memory_data().get("janggi")
-                      or {}).get("level")
-    extra = {"open": True}
-
-    if first == "dia":
-        rel = memory_manager.load_relationship() or {}
-        pick = JG.choose(board, AVATAR.jg_side(),
-                         level or AVATAR.jg_level().get("key", "normal"),
-                         mercy=AVATAR.jg_mercy(rel.get("affinity", 0)))
-
-        if pick is not None:
-            board = JG.move(board, *pick)
-            extra.update(spot=pick[1], **{"from": pick[0]})
-
-    _jg_save(board, level)
-
-    print(f"[장기]: 판을 펼쳤습니다 ({'다이아' if first == 'dia' else '사람'} 선공).")
-
-    return _jg_out(board, say, extra)
-
-
 @app.route("/api/janggi/new", methods=["POST"])
 def janggi_new_api():
-    """선공을 가위바위보로 정한 뒤에만 열린다(_first_gate)."""
+    import janggi as JG
 
     try:
         data = request.get_json(silent=True) or {}
+        board = JG.new_board()
+        _jg_save(board, data.get("level"))
 
-        gate = _first_gate("janggi")
+        print("[장기]: 판을 펼쳤습니다.")
 
-        if not gate:
-            return jsonify(_first_needed())
+        # 가위바위보로 다이아가 먼저가 되면 다이아가 첫 수를 둔다.
+        # 편(한·초)은 그대로다 — 먼저 두는 쪽만 바뀐다.
+        if data.get("first") == "dia":
+            mine = AVATAR.jg_side()
+            g = _jg_load() or {}
+            rel = memory_manager.load_relationship() or {}
+            pick = JG.choose(board, mine,
+                             g.get("level") or AVATAR.jg_level().get("key", "normal"),
+                             mercy=AVATAR.jg_mercy(rel.get("affinity", 0)))
 
-        first = "dia" if data.get("first") == "dia" else "you"
+            if pick is not None:
+                board = JG.move(board, *pick)
+                _jg_save(board, g.get("level"))
 
-        return jsonify(_jg_open(first, data.get("level") or gate.get("level"),
-                                AVATAR.jg_say("open", _go_stage())))
+                say = AVATAR.jg_say("move", _go_stage(), spot=JG.name(pick[1]))
+
+                return jsonify(_jg_out(board, say, {"open": True,
+                                                    "spot": pick[1],
+                                                    "from": pick[0]}))
+
+        say = AVATAR.jg_say("open", _go_stage())
+        out = _jg_out(board, say)
+        out["open"] = True
+
+        return jsonify(out)
 
     except Exception as e:
         print(f"[장기 새 판 오류]: {e}")
@@ -2005,13 +2050,13 @@ def janggi_move_api():
             _go_bump(say.get("affinity", 0))
             print("[장기]: 사람이 이겼습니다.")
 
-            return jsonify(_jg_out(board, say, {"open": False, "winner": "you"}))
+            return jsonify(_jg_end(board, say, {"open": False, "winner": "you"}))
 
         if end == "stalemate":
             _jg_clear()
             say = AVATAR.jg_say("draw", _go_stage())
 
-            return jsonify(_jg_out(board, say, {"open": False}))
+            return jsonify(_jg_end(board, say, {"open": False}))
 
         # 다이아가 받는다
         rel = memory_manager.load_relationship() or {}
@@ -2026,7 +2071,7 @@ def janggi_move_api():
             _jg_clear()
             say = AVATAR.jg_say("draw", _go_stage())
 
-            return jsonify(_jg_out(board, say, {"open": False}))
+            return jsonify(_jg_end(board, say, {"open": False}))
 
         took = board[pick[1]]
         board = JG.move(board, *pick)
@@ -2040,7 +2085,7 @@ def janggi_move_api():
             _go_bump(say.get("affinity", 0))
             print(f"[장기]: 다이아가 이겼습니다 ({spot}).")
 
-            return jsonify(_jg_out(board, say, {"open": False, "winner": "dia"}))
+            return jsonify(_jg_end(board, say, {"open": False, "winner": "dia"}))
 
         _jg_save(board, g.get("level"))
 
@@ -2174,43 +2219,29 @@ def halli_state_api():
     return jsonify(_hg_out(g))
 
 
-def _hg_open(first, level=None, say=None):
-    """판을 연다. first 가 'dia' 면 다이아가 첫 장을 뒤집는다.
-
-    뒤집는 것은 화면이 한다 — 다이아 차례면 화면이 알아서 부른다.
-    여기서는 차례만 넘겨 둔다.
-    """
-    import halli as HG
-
-    level = (level
-             or (memory_manager.load_memory_data().get("halli") or {}).get("level")
-             or AVATAR.hg_level().get("key", "normal"))
-
-    g = HG.new_game(level=level)
-    g["turn"] = "dia" if first == "dia" else "you"
-    _hg_save(g)
-
-    print(f"[할리갈리]: 판을 열었습니다 ({'다이아' if first == 'dia' else '사람'} 선공).")
-
-    return _hg_out(g, say)
-
-
 @app.route("/api/halli/new", methods=["POST"])
 def halli_new_api():
-    """선공을 가위바위보로 정한 뒤에만 열린다(_first_gate)."""
+    import halli as HG
 
     try:
         data = request.get_json(silent=True) or {}
+        level = data.get("level") or AVATAR.hg_level().get("key", "normal")
 
-        gate = _first_gate("halli")
+        g = HG.new_game(level=level)
 
-        if not gate:
-            return jsonify(_first_needed())
+        # 가위바위보로 다이아가 먼저가 되면 다이아가 먼저 뒤집는다.
+        # 화면은 다이아 차례를 보면 알아서 뒤집기를 부른다.
+        if data.get("first") == "dia":
+            g["turn"] = "dia"
 
-        first = "dia" if data.get("first") == "dia" else "you"
+        _hg_save(g)
 
-        return jsonify(_hg_open(first, data.get("level") or gate.get("level"),
-                                _hg_say("open")))
+        print(f"[할리갈리]: 판을 열었습니다 ({g.get('turn')} 먼저).")
+
+        # '먼저 뒤집으세요' 는 사람이 먼저일 때만 맞는 말이다
+        say = None if g.get("turn") == "dia" else _hg_say("open")
+
+        return jsonify(_hg_out(g, say))
 
     except Exception as e:
         print(f"[할리갈리 새 판 오류]: {e}")
@@ -2237,7 +2268,10 @@ def halli_flip_api():
             lost = (who == "dia")
             say = _hg_say("lost" if lost else "won")
 
-            return jsonify(_hg_out(None, say, {"winner": "you" if lost else "dia"}))
+            out = _hg_out(None, say, {"winner": "you" if lost else "dia"})
+            _again(out, "halli")
+
+            return jsonify(out)
 
         # 종 칠 때인가. 다이아가 얼마나 빨리 칠지 굴린다.
         fruit = HG.should_ring(g)
@@ -2326,7 +2360,10 @@ def halli_bell_api():
             _hg_clear()
             end = _hg_say("won" if won == "dia" else "lost")
 
-            return jsonify(_hg_out(None, end, {"winner": won}))
+            out = _hg_out(None, end, {"winner": won})
+            _again(out, "halli")
+
+            return jsonify(out)
 
         _hg_save(g)
 
@@ -2390,7 +2427,7 @@ def _go_load():
     return g
 
 
-def _go_save(board, level=None):
+def _go_save(board, level=None, dia=None):
     data = memory_manager.load_memory_data()
     before = data.get("gomoku") or {}
 
@@ -2398,9 +2435,18 @@ def _go_save(board, level=None):
         "board": board,
         "level": level or before.get("level")
                  or AVATAR.go_level().get("key", "normal"),
+        # 다이아가 잡은 돌. 판마다 다르다 — 가위바위보로 먼저 두게
+        # 되면 다이아가 검은 돌(선공)을 잡는다.
+        "dia": dia or before.get("dia") or AVATAR.go_stone(),
     }
 
     memory_manager.save_memory_data(data)
+
+
+def _go_dia(g=None):
+    """이 판에서 다이아가 잡은 돌."""
+    g = g if g is not None else (_go_load() or {})
+    return g.get("dia") or AVATAR.go_stone()
 
 
 def _go_clear():
@@ -2438,7 +2484,7 @@ def _go_view(board, event=None, spot=None):
     """화면에 돌려줄 것 한 벌."""
     import gomoku as GO
 
-    out = GO.view(board, AVATAR.go_stone())
+    out = GO.view(board, _go_dia())
     out["ok"] = True
     out["level"] = (_go_load() or {}).get(
         "level", AVATAR.go_level().get("key", "normal"))
@@ -2469,55 +2515,52 @@ def gomoku_state_api():
     return jsonify(out)
 
 
-def _go_open(first, level=None, event=None):
-    """판을 연다. first 가 'dia' 면 다이아가 첫 돌을 놓고 넘긴다."""
-    import gomoku as GO
-
-    board = GO.new_board()
-    level = level or (memory_manager.load_memory_data().get("gomoku")
-                      or {}).get("level")
-    spot = None
-
-    if first == "dia":
-        mine = AVATAR.go_stone()
-        rel = memory_manager.load_relationship() or {}
-        spot = GO.choose(board, mine,
-                         level or AVATAR.go_level().get("key", "normal"),
-                         mercy=AVATAR.go_mercy(rel.get("affinity", 0)))
-
-        if spot is not None:
-            r, c = divmod(spot, GO.SIZE)
-            board = GO.put(board, r, c, mine)
-
-    _go_save(board, level)
-
-    print(f"[오목]: 판을 열었습니다 ({'다이아' if first == 'dia' else '사람'} 선공).")
-
-    out = _go_view(board, event)
-    out["open"] = True
-
-    if spot is not None:
-        out["spot"] = spot
-
-    return out
-
-
 @app.route("/api/gomoku/new", methods=["POST"])
 def gomoku_new_api():
-    """선공을 가위바위보로 정한 뒤에만 열린다(_first_gate)."""
+    import gomoku as GO
 
     try:
         data = request.get_json(silent=True) or {}
+        level = data.get("level")
+        first = data.get("first")
 
-        gate = _first_gate("gomoku")
+        # 검은 돌이 먼저 둔다. 가위바위보로 다이아가 먼저가 되면
+        # 다이아가 검은 돌을 잡고 첫 수를 둔다.
+        if first == "dia":
+            dia = GO.BLACK
+        elif first == "you":
+            dia = GO.WHITE
+        else:
+            dia = AVATAR.go_stone()
 
-        if not gate:
-            return jsonify(_first_needed())
+        board = GO.new_board()
+        _go_save(board, level, dia)
 
-        first = "dia" if data.get("first") == "dia" else "you"
+        print(f"[오목]: 판을 열었습니다 (다이아 {dia}).")
 
-        return jsonify(_go_open(first, data.get("level") or gate.get("level"),
-                                "open"))
+        if dia == GO.BLACK:
+            g = _go_load() or {}
+            rel = memory_manager.load_relationship() or {}
+            pick = GO.choose(board, dia,
+                             g.get("level") or AVATAR.go_level().get("key", "normal"),
+                             mercy=AVATAR.go_mercy(rel.get("affinity", 0)))
+
+            if pick is not None:
+                rr, cc = divmod(pick, GO.SIZE)
+                board = GO.put(board, rr, cc, dia)
+                _go_save(board)
+
+                out = _go_view(board, "move", GO.name(pick))
+                out["open"] = True
+                out["spot"] = pick
+
+                return jsonify(out)
+
+        # 사람이 먼저 두는 판. '먼저 두세요' 하고 연다.
+        out = _go_view(board, "open")
+        out["open"] = True
+
+        return jsonify(out)
 
     except Exception as e:
         print(f"[오목 새 판 오류]: {e}")
@@ -2545,7 +2588,7 @@ def gomoku_move_api():
         if board[spot] != GO.EMPTY:
             return jsonify({"ok": False, "error": "이미 돌이 있습니다."}), 400
 
-        mine = AVATAR.go_stone()
+        mine = _go_dia(g)
         yours = GO.other(mine)
 
         r, c = divmod(spot, GO.SIZE)
@@ -2562,6 +2605,7 @@ def gomoku_move_api():
                         "reply": say.get("line"),
                         "expression": say.get("expression"),
                         "motion": say.get("motion")})
+            _again(out, "gomoku")
             print("[오목]: 사람이 이겼습니다.")
 
             return jsonify(out)
@@ -2573,6 +2617,7 @@ def gomoku_move_api():
             out.update({"ok": True, "open": False, "winner": None,
                         "reply": say.get("line"),
                         "expression": say.get("expression")})
+            _again(out, "gomoku")
 
             return jsonify(out)
 
@@ -2591,6 +2636,7 @@ def gomoku_move_api():
             say = AVATAR.go_say("draw", _go_stage())
             out = GO.view(board, mine)
             out.update({"ok": True, "open": False, "reply": say.get("line")})
+            _again(out, "gomoku")
 
             return jsonify(out)
 
@@ -2608,6 +2654,7 @@ def gomoku_move_api():
                         "reply": say.get("line"),
                         "expression": say.get("expression"),
                         "motion": say.get("motion")})
+            _again(out, "gomoku")
             print(f"[오목]: 다이아가 이겼습니다 ({name}).")
 
             return jsonify(out)
@@ -2668,157 +2715,6 @@ def gomoku_resign_api():
     except Exception as e:
         print(f"[오목 그만 오류]: {e}")
         return jsonify({"ok": False, "error": str(e)[:120]}), 500
-
-
-# ============================================================
-# 선공은 가위바위보로 (오목·할리갈리·장기)
-#
-# 체스에서 하던 것을 다른 판에도 똑같이 건다. 판을 열기 전에
-# 가위바위보 한 판 — 다이아가 이기면 자기가 먼저 하고 판이 바로
-# 열리고, 사람이 이기면 먼저 할지 나중에 할지 고른다. 비기면 다시.
-#
-# 이 순서는 **서버가 쥔다.** /api/<놀이>/new 는 사람이 이겨서 고를
-# 차례일 때만 판을 연다(_first_gate). 화면이 깜빡하고 바로 new 를
-# 불러도 가위바위보를 건너뛸 수 없다.
-#
-# 정하는 동안의 상태는 그 놀이 자리에 둔다 — {"deciding", "choose",
-# "level"}. 판(board·on)이 없으니 각 놀이의 _load 는 '판 없음' 으로 본다.
-# 새 기억 항목이 아니라서 memory_manager 흰 목록을 안 건드린다.
-# ============================================================
-
-def _first_openers():
-    return {"gomoku": _go_open, "halli": _hg_open, "janggi": _jg_open}
-
-
-def _first_slot(game):
-    s = memory_manager.load_memory_data().get(game)
-    return s if isinstance(s, dict) else {}
-
-
-def _first_put(game, slot):
-    d = memory_manager.load_memory_data()
-    d[game] = slot
-    memory_manager.save_memory_data(d)
-
-
-def _first_gate(game):
-    """사람이 가위바위보를 이겨 고를 차례인가. 아니면 None."""
-    s = _first_slot(game)
-    return s if (s.get("deciding") and s.get("choose")) else None
-
-
-def _first_needed():
-    return {"ok": False, "need_first": True,
-            "error": "선공부터 가위바위보로 정해요."}
-
-
-def _first_log(line):
-    if not line:
-        return
-    try:
-        memory_manager.append_message("assistant", line)
-    except Exception as e:
-        print("[선공 정하기 기록 실패]:", e)
-
-
-@app.route("/api/first/<game>/start", methods=["POST"])
-def first_start_api(game):
-    """판을 열기 전에 '가위바위보로 정하자' 고 말만 한다."""
-
-    if game not in _first_openers():
-        return jsonify({"ok": False, "error": "그런 놀이가 없습니다."}), 404
-
-    data = request.get_json(silent=True) or {}
-    before = _first_slot(game)
-
-    _first_put(game, {
-        "deciding": True,
-        "choose": False,
-        "level": data.get("level") or before.get("level"),
-    })
-
-    said = AVATAR.first_say(game, "ask", _go_stage())
-    _first_log(said.get("line"))
-
-    return jsonify({
-        "ok": True,
-        "open": False,
-        "on": False,
-        "deciding": True,
-        "hands": AVATAR.rps_hands(),
-        "reply": said.get("line"),
-        "expression": said.get("expression"),
-    })
-
-
-@app.route("/api/first/<game>/rps", methods=["POST"])
-def first_rps_api(game):
-    """선공을 가리는 가위바위보 한 판. 체스의 /api/chess/rps 와 같은 규칙."""
-
-    openers = _first_openers()
-
-    if game not in openers:
-        return jsonify({"ok": False, "error": "그런 놀이가 없습니다."}), 404
-
-    slot = _first_slot(game)
-
-    if not slot.get("deciding") or slot.get("choose"):
-        return jsonify({"ok": False, "error": "선공을 정하는 중이 아닙니다."})
-
-    data = request.get_json(silent=True) or {}
-
-    saved = memory_manager.load_relationship() or {}
-    affinity = saved.get("affinity",
-                         AVATAR.relationship.get("start_affinity", 0))
-    stage = _stage_now(affinity, saved.get("stage"))
-
-    result = AVATAR.rps_play(data.get("hand"), stage=stage, affinity=affinity)
-
-    if result is None:
-        return jsonify({"ok": False, "error": "가위바위보에 없는 손입니다."})
-
-    _rps_tally(result.get("result"))
-
-    try:
-        memory_manager.append_message(
-            "user",
-            f"(선공 가위바위보 - 나는 {result['you_label']}, "
-            f"다이아는 {result['mine_label']})")
-    except Exception as e:
-        print("[선공 가위바위보 기록 실패]:", e)
-
-    rps = {
-        "motion": result.get("motion"),      # 다이아가 낸 손
-        "you_hand": result.get("you"),
-        "dia_hand": result.get("mine"),
-        "result": result.get("result"),      # 다이아 기준
-    }
-
-    # 친밀도는 안 건드린다 — 순서를 정하는 자리지 놀이로 사이가 오가는
-    # 자리가 아니다(체스와 같다).
-    if result.get("result") == "win":
-        said = AVATAR.first_say(game, "dia_won", stage)
-        out = openers[game]("dia", slot.get("level"))
-        out.update(reply=said.get("line"), expression=said.get("expression"),
-                   deciding=False)
-
-    elif result.get("result") == "lose":
-        said = AVATAR.first_say(game, "you_won", stage)
-        _first_put(game, dict(slot, choose=True))
-        out = {"ok": True, "open": False, "on": False, "deciding": True,
-               "choose": True, "reply": said.get("line"),
-               "expression": said.get("expression")}
-
-    else:
-        said = AVATAR.first_say(game, "tie", stage)
-        out = {"ok": True, "open": False, "on": False, "deciding": True,
-               "hands": AVATAR.rps_hands(), "reply": said.get("line"),
-               "expression": said.get("expression")}
-
-    out.update(rps)
-    _first_log(said.get("line"))
-
-    return jsonify(out)
 
 
 # ============================================================
@@ -3740,6 +3636,10 @@ def _chess_reply(event, extra=None):
         "expression": said.get("expression"),
     }
 
+    # 판이 끝났으면 한 판 더 할지 묻는다
+    if event in ("win", "lose") or str(event).startswith("draw"):
+        _log_line("assistant", _again(out, "chess", key="line"))
+
     if extra:
         out.update(extra)
 
@@ -3815,21 +3715,12 @@ def chess_state_api():
 
 @app.route("/api/chess/new", methods=["POST"])
 def chess_new_api():
-    """새 판을 연다.
-
-    선공 가위바위보에서 사람이 이겨 고를 차례일 때만 열린다. 예전에는
-    '새 판' 단추와 말 색 단추가 이리로 바로 와서 가위바위보를 건너뛰었다.
-    """
+    """새 판을 연다."""
 
     import chess
     import chess_play
 
     data = request.get_json(silent=True) or {}
-
-    g = _chess_load() or {}
-
-    if not (g.get("deciding") and g.get("choose")):
-        return jsonify(dict(_first_needed(), line=None))
 
     # 사람이 어느 쪽을 잡는가.
     #
@@ -4000,6 +3891,258 @@ def _rps_tally(result):
 
     d["rps"] = t
     memory_manager.save_memory_data(d)
+
+
+def _log_line(role, line):
+    """놀이에서 오간 말을 대화 기록에 남긴다. 체스와 같은 까닭."""
+    if not line:
+        return
+
+    try:
+        memory_manager.append_message(role, line)
+    except Exception as e:
+        print("[놀이 말 기록 실패]:", e)
+
+
+# ============================================================
+# 한 판 더
+#
+# 판이 끝나면(이기든 지든 비기든) 다이아가 한 판 더 할지 묻는다.
+# 화면은 again 을 보고 사람의 다음 말을 그 물음의 답으로 읽는다
+# (/api/again/answer). 기권·그만으로 끝낸 판에는 묻지 않는다.
+# ============================================================
+
+def _again(out, game, key="reply"):
+    """끝난 판의 말 끝에 '한 판 더 할래?' 를 붙인다. 붙인 말을 돌려준다.
+
+    이긴 말에 이미 '한 판 더' 가 들어 있으면 또 묻지 않는다.
+    """
+    ask = AVATAR.again_say("ask", _go_stage()).get("line") or ""
+    line = out.get(key) or ""
+
+    out["again"] = game
+
+    if not ask or "한 판 더" in line.replace("한판", "한 판"):
+        return None
+
+    out[key] = f"{line} {ask}".strip()
+
+    return ask
+
+
+@app.route("/api/again/answer", methods=["POST"])
+def again_answer_api():
+    """'한 판 더 할래?' 에 대한 답인가. 답이면 기록하고 받는 말을 준다.
+
+    answer: yes(다시) / no(그만) / None(딴 이야기 — 화면이 평소처럼 보낸다)
+    """
+    data = request.get_json(silent=True) or {}
+    text = str(data.get("text") or "").strip()[:200]
+    game = str(data.get("game") or "")
+
+    answer = AVATAR.again_answer(text)
+
+    if answer is None:
+        return jsonify({"ok": True, "answer": None})
+
+    _log_line("user", text)
+
+    out = {"ok": True, "answer": answer, "game": game}
+
+    if answer == "no":
+        said = AVATAR.again_say("no", _go_stage())
+        out.update(line=said.get("line"), expression=said.get("expression"))
+        _log_line("assistant", said.get("line"))
+
+        print(f"[한 판 더]: 그만 — {game}")
+    else:
+        print(f"[한 판 더]: 다시 — {game}")
+
+    return jsonify(out)
+
+
+# ============================================================
+# 선공 정하기 — 오목·장기·할리갈리·끝말잇기
+#
+# 어느 놀이든 시작하기 전에 가위바위보로 먼저 할 사람을 정한다.
+# 체스(/api/chess/start)와 같은 규칙이다 — 비기면 다시, 다이아가
+# 이기면 다이아가 먼저, 사람이 이기면 먼저/나중을 고른다.
+#
+# 정해지면 화면이 그 놀이의 /new 에 first(you|dia)를 실어 판을 연다.
+# ============================================================
+
+FIRST_GAMES = ("gomoku", "janggi", "halli", "word_chain")
+
+
+def _first_load():
+    f = memory_manager.load_memory_data().get("first")
+    return f if isinstance(f, dict) else {}
+
+
+def _first_save(f):
+    d = memory_manager.load_memory_data()
+    d["first"] = f or {}
+    memory_manager.save_memory_data(d)
+
+
+@app.route("/api/first/start", methods=["POST"])
+def first_start_api():
+    data = request.get_json(silent=True) or {}
+    game = str(data.get("game") or "")
+
+    if game not in FIRST_GAMES:
+        return jsonify({"ok": False, "error": "그런 놀이가 없습니다."}), 400
+
+    _first_save({"game": game, "deciding": True})
+
+    stage = _go_stage()
+    said = AVATAR.first_say("ask", stage)
+    line = said.get("line")
+
+    # '한 판 더' 에 그러자고 해서 온 것이면 반기는 말을 앞에 붙인다
+    if data.get("again"):
+        yes = AVATAR.again_say("yes", stage).get("line")
+        if yes:
+            line = f"{yes} {line}" if line else yes
+
+    _log_line("assistant", line)
+
+    return jsonify({
+        "ok": True,
+        "game": game,
+        "deciding": True,
+        "hands": AVATAR.rps_hands(),
+        "line": line,
+        "expression": said.get("expression"),
+    })
+
+
+@app.route("/api/first/rps", methods=["POST"])
+def first_rps_api():
+    data = request.get_json(silent=True) or {}
+    f = _first_load()
+
+    if not f.get("deciding") or f.get("choose"):
+        return jsonify({"ok": False, "error": "가위바위보를 낼 때가 아닙니다."})
+
+    saved = memory_manager.load_relationship() or {}
+    affinity = saved.get("affinity",
+                         AVATAR.relationship.get("start_affinity", 0))
+    stage = _stage_now(affinity, saved.get("stage"))
+
+    result = AVATAR.rps_play(data.get("hand"), stage=stage, affinity=affinity)
+
+    if result is None:
+        return jsonify({"ok": False, "error": "가위바위보에 없는 손입니다."})
+
+    _rps_tally(result.get("result"))
+
+    _log_line("user",
+              f"(선공 가위바위보 - 나는 {result['you_label']}, "
+              f"다이아는 {result['mine_label']})")
+
+    out = {
+        "ok": True,
+        "game": f.get("game"),
+        "deciding": True,
+        "hands": AVATAR.rps_hands(),
+        "motion": result.get("motion"),      # 다이아가 낸 손
+        "you_hand": result.get("you"),
+        "dia_hand": result.get("mine"),
+        "you_label": result.get("you_label"),
+        "dia_label": result.get("mine_label"),
+        # result 는 다이아 기준이다. win 이면 다이아가 이겼다.
+        "result": result.get("result"),
+    }
+
+    # 선공을 정하는 것이지 놀이로 사이가 오가는 자리가 아니다 —
+    # 친밀도는 안 건드린다(체스와 같다).
+    if result.get("result") == "draw":
+        said = AVATAR.first_say("tie", stage)
+
+    elif result.get("result") == "win":
+        said = AVATAR.first_say("dia_won", stage)
+        _first_save({})
+        out.update(deciding=False, first="dia")
+
+    else:
+        said = AVATAR.first_say("you_won", stage)
+        _first_save(dict(f, choose=True))
+        out["choose"] = True
+
+    out.update(line=said.get("line"), expression=said.get("expression"))
+    _log_line("assistant", said.get("line"))
+
+    return jsonify(out)
+
+
+@app.route("/api/first/choose", methods=["POST"])
+def first_choose_api():
+    """가위바위보에 이긴 사람이 먼저/나중을 고른다."""
+    data = request.get_json(silent=True) or {}
+    f = _first_load()
+
+    if not f.get("choose"):
+        return jsonify({"ok": False, "error": "고를 때가 아닙니다."})
+
+    first = "dia" if data.get("first") == "dia" else "you"
+    _first_save({})
+
+    return jsonify({"ok": True, "game": f.get("game"),
+                    "deciding": False, "first": first})
+
+
+# ============================================================
+# 끝말잇기 — 선공을 정한 뒤 여는 길
+#
+# 끝말잇기는 대화 안에서 돈다(ai_brain._word_chain_turn). 원래는
+# "끝말잇기 하자" 하면 다이아가 곧바로 첫 낱말을 냈다. 이제 화면이
+# 가위바위보로 선공을 정한 뒤 여기서 판을 연다. 사람이 먼저면 첫
+# 낱말을 기다린다 — 앞 낱말이 비어 있으면 아무 글자로나 시작한다.
+# ============================================================
+
+@app.route("/api/wordchain/state")
+def wordchain_state_api():
+    from ai_brain import _wc_load
+
+    return jsonify({"ok": True, "on": bool(_wc_load().get("on"))})
+
+
+@app.route("/api/wordchain/new", methods=["POST"])
+def wordchain_new_api():
+    import word_chain as WC
+    from ai_brain import _wc_save
+
+    try:
+        data = request.get_json(silent=True) or {}
+        stage = _go_stage()
+        level = AVATAR.wc_level().get("key", "normal")
+
+        if data.get("first") == "you":
+            _wc_save({"on": True, "last": "", "used": [], "level": level})
+            say = AVATAR.wc_say("open_you", stage)
+            print("[끝말잇기]: 시작 — 사람이 먼저")
+        else:
+            word = WC.pick(None, set(), level)
+
+            if not word:
+                return jsonify({"ok": False, "error": "낼 낱말이 없습니다."}), 500
+
+            _wc_save({"on": True, "last": word, "used": [word],
+                      "level": level})
+            say = AVATAR.wc_say("open", stage, word=word)
+            print(f"[끝말잇기]: 시작 — {word}")
+
+        _log_line("assistant", say.get("line"))
+
+        return jsonify({"ok": True, "on": True,
+                        "reply": say.get("line"),
+                        "expression": say.get("expression"),
+                        "motion": say.get("motion")})
+
+    except Exception as e:
+        print(f"[끝말잇기 새 판 오류]: {e}")
+        return jsonify({"ok": False, "error": str(e)[:120]}), 500
 
 
 

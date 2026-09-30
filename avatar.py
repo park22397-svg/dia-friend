@@ -1448,21 +1448,11 @@ class VirtualAvatar:
         key: ask / tie / dia_won / you_won
         """
 
-        return self.first_say("chess", key, stage, rng)
-
-    def first_say(self, game, key, stage=None, rng=None):
-        """어느 놀이든 선공 정하기에서 하는 말.
-
-        놀이마다 다른 말만 그 놀이의 first_move 에 적는다. 없으면
-        체스 것을 쓴다 — 가위바위보를 하자는 말은 어느 판이든 같다.
-        """
-
         import random as _random
 
         rng = rng or _random
 
-        conf = (self.game.get(game, {}).get("first_move", {}).get(key)
-                or self.chess().get("first_move", {}).get(key, {}))
+        conf = self.chess().get("first_move", {}).get(key, {})
         lines = conf.get("lines", {})
 
         tone = "polite" if self._polite(stage) else "casual"
@@ -1472,6 +1462,65 @@ class VirtualAvatar:
             "line": rng.choice(list(pool)) if pool else None,
             "expression": conf.get("expression"),
         }
+
+    def _game_line(self, conf, stage=None, rng=None):
+        """{expression, lines{polite,casual}} 한 벌에서 말 하나."""
+        import random as _random
+
+        rng = rng or _random
+
+        lines = (conf or {}).get("lines", {})
+        tone = "polite" if self._polite(stage) else "casual"
+        pool = lines.get(tone) or lines.get("polite") or []
+
+        return {
+            "line": rng.choice(list(pool)) if pool else None,
+            "expression": (conf or {}).get("expression"),
+        }
+
+    def first_say(self, key, stage=None, rng=None):
+        """오목·장기·할리갈리·끝말잇기의 선공 정하기에서 하는 말.
+
+        key: ask / tie / dia_won / you_won
+        """
+        conf = self.game.get("first_move", {}).get(key)
+
+        if conf is None:
+            return self.chess_first_say(key, stage, rng)
+
+        return self._game_line(conf, stage, rng)
+
+    def again_conf(self):
+        return self.game.get("again", {})
+
+    def again_say(self, kind, stage=None, rng=None):
+        """한 판 더. kind: ask / yes / no"""
+        return self._game_line(self.again_conf().get(kind), stage, rng)
+
+    def again_answer(self, text):
+        """한 판 더 하자는 물음에 대한 답을 가른다.
+
+        반환: "yes" / "no" / None(딴 이야기)
+        순서가 있다 — 다시 하자는 말 > 그만하자는 말 > 짧은 대답.
+        """
+        conf = self.again_conf()
+        flat = "".join(str(text or "").split()).lower()
+        flat = flat.strip("!?.…~,·'\"")
+
+        if not flat:
+            return None
+
+        if any(w in flat for w in conf.get("again_words", [])):
+            return "yes"
+
+        if any(w in flat for w in conf.get("stop_words", [])):
+            return "no"
+
+        if len(flat) <= int(conf.get("short_len", 10)) and any(
+                flat.startswith(w) for w in conf.get("yes_words", [])):
+            return "yes"
+
+        return None
 
     def chess_say(self, event, stage=None, rng=None):
         """그 일이 났을 때 무슨 얼굴로 뭐라고 하는가.
@@ -3305,6 +3354,18 @@ class VirtualAvatar:
                     },
                     "reveal_t": self.rps().get("reveal_t", 1.35),
                 },
+
+                # 말로 놀이를 부르는 낱말. 화면이 이것으로 "오목 하자" ·
+                # "끝말잇기 하자" 를 알아듣고 판(과 선공 가위바위보)을 연다.
+                #
+                # 예전에는 rps 만 넘겨서 화면의 트리거 목록이 전부 비어 있었다.
+                # 그래서 말로 부른 놀이는 판이 안 열리고 모델에게 갔다 —
+                # 끝말잇기는 서버가 가위바위보 없이 다이아부터 시작했다.
+                **{k: {"triggers": (self.game.get(k) or {}).get("triggers", [])}
+                   for k in ("chess", "gomoku", "halli", "janggi", "word_chain")},
+
+                # 한 판 더 — 물은 뒤 얼마 동안 답을 기다리는가
+                "again": {"ttl_sec": self.again_conf().get("ttl_sec", 600)},
             },
             "touch": {
                 "head_split": self.touch.get("head_split", {}),
@@ -4027,12 +4088,11 @@ DIA = VirtualAvatar(
             # 왼쪽 도구 막대를 통째로 끌 것인가.
             "eye_bar": True,
 
-            # 그중 안 보일 단추만 고른다.
+            # 그중 안 보일 단추만 고른다. 단추만 감추고 기능은 남는다.
             #
             # 시점 바꾸기(1인칭/3인칭)와 카메라 화면을 배경으로 까는 것은
-            # 안 쓴다고 해서 뺐다 (2026-09-22). 사진·카메라·마이크는 남긴다.
-            # 기능이 사라지는 것은 아니다 — 단추만 안 보인다.
-            "hide_buttons": ["eye-view", "eye-room"],
+            # 2026-09-22 에 여기서 감췄다가, 2026-09-30 에 코드째 걷어냈다.
+            "hide_buttons": [],
         },
     },
 
@@ -6622,6 +6682,16 @@ DIA = VirtualAvatar(
                 },
             },
 
+            # 가위바위보에서 사람이 먼저 내기로 했을 때.
+            # 다이아가 먼저면 open 을 쓴다(첫 낱말을 같이 낸다).
+            "open_you": {
+                "expression": "fun",
+                "lines": {
+                    "polite": ["좋아요. 먼저 내세요.", "그럼 먼저 시작하세요."],
+                    "casual": ["좋아. 네가 먼저 내.", "그럼 너부터 시작해."],
+                },
+            },
+
             # 그만둘 때
             "stop": {
                 "expression": "neutral",
@@ -6642,23 +6712,6 @@ DIA = VirtualAvatar(
         # 빅장·외통까지.
         # ----------------------------------------------------
         "janggi": {
-
-            # 선공 정하기. 체스와 다른 말만 적는다(흰 말 이야기가 안 맞는다).
-            "first_move": {
-                "you_won": {
-                    "expression": "angry",
-                    "lines": {
-                        "polite": [
-                            "졌네요. 먼저 두실래요, 나중에 두실래요?",
-                            "제가 졌어요. 먼저 둘지 고르세요.",
-                        ],
-                        "casual": [
-                            "졌네. 먼저 둘래, 나중에 둘래?",
-                            "내가 졌다. 먼저 둘지 골라.",
-                        ],
-                    },
-                },
-            },
 
             "levels": [
                 {"key": "easy", "label": "쉬움"},
@@ -6778,37 +6831,6 @@ DIA = VirtualAvatar(
         # 한 번도 안 틀리는 상대는 사람 같지 않다.
         # ----------------------------------------------------
         "halli": {
-
-            # 선공 정하기. 할리갈리는 두는 게 아니라 뒤집는 것이라
-            # 체스 말과 다른 것만 적는다.
-            "first_move": {
-                "dia_won": {
-                    "expression": "joy",
-                    "lines": {
-                        "polite": [
-                            "제가 이겼어요. 그럼 제가 먼저 뒤집을게요. (다이아 선공)",
-                            "이겼다. 첫 장은 제가 뒤집을게요. (다이아 선공)",
-                        ],
-                        "casual": [
-                            "내가 이겼다. 그럼 내가 먼저 뒤집는다. (다이아 선공)",
-                            "이겼다. 첫 장은 내가 뒤집을게. (다이아 선공)",
-                        ],
-                    },
-                },
-                "you_won": {
-                    "expression": "angry",
-                    "lines": {
-                        "polite": [
-                            "졌네요. 먼저 뒤집으실래요, 나중에 하실래요?",
-                            "제가 졌어요. 먼저 할지 고르세요.",
-                        ],
-                        "casual": [
-                            "졌네. 먼저 뒤집을래, 나중에 할래?",
-                            "내가 졌다. 먼저 할지 골라.",
-                        ],
-                    },
-                },
-            },
 
             "levels": [
                 {"key": "easy", "label": "느긋"},
@@ -6934,23 +6956,6 @@ DIA = VirtualAvatar(
         # ----------------------------------------------------
         "gomoku": {
 
-            # 선공 정하기. 체스와 다른 말만 적는다(흰 말 이야기가 안 맞는다).
-            "first_move": {
-                "you_won": {
-                    "expression": "angry",
-                    "lines": {
-                        "polite": [
-                            "졌네요. 먼저 두실래요, 나중에 두실래요?",
-                            "제가 졌어요. 먼저 둘지 고르세요.",
-                        ],
-                        "casual": [
-                            "졌네. 먼저 둘래, 나중에 둘래?",
-                            "내가 졌다. 먼저 둘지 골라.",
-                        ],
-                    },
-                },
-            },
-
             # 세기. gomoku.LEVELS 와 같은 열쇠말이다.
             #
             # 체스에서 배운 것 — 깊이만 낮추면 아무리 낮춰도 잘 안 진다.
@@ -7065,6 +7070,122 @@ DIA = VirtualAvatar(
                     "casual": ["그만할래? 알겠어."],
                 },
             },
+        },
+
+        # ----------------------------------------------------
+        # 선공 정하기 — 오목·장기·할리갈리·끝말잇기
+        #
+        # 어느 놀이든 시작하기 전에 가위바위보로 먼저 할 사람을
+        # 정한다(사용자가 정한 규칙, 2026-09-28). 체스는 흰 말을
+        # 고르는 것이라 chess.first_move 를 따로 쓴다.
+        # 이긴 사람이 고른다. 다이아가 이기면 다이아가 먼저 한다.
+        # ----------------------------------------------------
+        "first_move": {
+            "ask": {
+                "expression": "fun",
+                "lines": {
+                    "polite": [
+                        "먼저 할 사람은 가위바위보로 정해요. (가위 바위 보 — 아래에서 하나 고르세요)",
+                        "누가 먼저 할지 가위바위보로 정할까요? (가위 바위 보 — 셋 중 하나를 고르세요)",
+                    ],
+                    "casual": [
+                        "먼저 할 사람 가위바위보로 정하자. (가위 바위 보 — 아래에서 하나 골라)",
+                        "누가 먼저 할지 가위바위보로 정하자. (가위 바위 보 — 셋 중 하나 골라)",
+                    ],
+                },
+            },
+            "tie": {
+                "expression": "fun",
+                "lines": {
+                    "polite": ["같은 걸 냈네요. (다시 — 가위 바위 보)",
+                               "비겼어요. (한 번 더 — 가위 바위 보)"],
+                    "casual": ["같은 거 냈네. (다시 — 가위 바위 보)",
+                               "비겼다. (한 번 더 — 가위 바위 보)"],
+                },
+            },
+            "dia_won": {
+                "expression": "joy",
+                "lines": {
+                    "polite": ["제가 이겼어요. 그럼 제가 먼저 할게요. (다이아 선공)",
+                               "이겼다. 먼저는 제가 가져갈게요. (다이아 선공)"],
+                    "casual": ["내가 이겼다. 그럼 내가 먼저 할게. (다이아 선공)",
+                               "이겼다. 먼저는 내가 가져간다. (다이아 선공)"],
+                },
+            },
+            "you_won": {
+                "expression": "angry",
+                "lines": {
+                    "polite": ["졌네요. 먼저 하실래요, 나중에 하실래요? (아래에서 고르세요)",
+                               "제가 졌어요. 고르세요. (먼저 / 나중)"],
+                    "casual": ["졌네. 먼저 할래, 나중에 할래? (아래에서 골라)",
+                               "내가 졌다. 골라. (먼저 / 나중)"],
+                },
+            },
+        },
+
+        # ----------------------------------------------------
+        # 한 판 더
+        #
+        # 판이 끝나면(이기든 지든 비기든) 다이아가 한 판 더 할지
+        # 묻는다. 사람이 채팅으로 답하면 그대로 한다 —
+        #   그래 / 한 판 더 하자 / 응  → 새 판(선공 가위바위보부터)
+        #   그만할래 / 됐어 / 나중에   → 그 놀이를 닫는다
+        # 스스로 그만둔 판(기권·그만)에는 묻지 않는다.
+        #
+        # 낱말은 띄어쓰기를 빼고 맞춘다("한판 더" = "한 판 더").
+        # 순서가 있다 — 다시 하자는 말 > 그만하자는 말 > 짧은 대답.
+        # "아니 한판 더 하자" 는 다시, "그래 그만하자" 는 그만이다.
+        # ----------------------------------------------------
+        "again": {
+            "ask": {
+                "lines": {
+                    "polite": ["한 판 더 할래요?", "한 판 더 해요?"],
+                    "casual": ["한 판 더 할래?", "한 판 더 하자, 응?"],
+                },
+            },
+            "yes": {
+                "expression": "joy",
+                "lines": {
+                    "polite": ["좋아요, 한 판 더 해요!", "그래요, 다시 해요."],
+                    "casual": ["좋아, 한 판 더!", "그래, 다시 하자."],
+                },
+            },
+            "no": {
+                "expression": "neutral",
+                "lines": {
+                    "polite": ["네, 여기까지 해요. 재밌었어요.",
+                               "알겠어요. 다음에 또 해요."],
+                    "casual": ["그래, 여기까지 하자. 재밌었어.",
+                               "알겠어. 다음에 또 하자."],
+                },
+            },
+
+            # 다시 하자는 말 — 이게 들어 있으면 다른 말이 섞여도 다시 한다
+            "again_words": [
+                "한판더", "한번더", "한게임더", "한겜더", "다시", "또하", "또해",
+                "재대결", "리벤지", "한판만더", "하나더",
+            ],
+
+            # 그만하자는 말
+            "stop_words": [
+                "그만", "안할래", "안해", "안하", "됐어", "됐다", "싫어",
+                "나중에", "다음에", "쉬자", "쉴래", "아니", "노노", "ㄴㄴ",
+                "끝낼래", "끝내자", "그만하자",
+            ],
+
+            # 짧은 대답. 이 말만으로 된 짧은 답일 때만 다시로 본다 —
+            # 긴 문장 속 '응' 은 딴 이야기일 수 있다.
+            "yes_words": [
+                "그래", "응", "좋아", "콜", "하자", "해", "할래", "ㅇㅇ",
+                "ㅇㅋ", "오케이", "ok", "okay", "고고", "가자", "당연",
+                "물론", "그럼", "네", "예",
+            ],
+
+            # 짧은 대답으로 보는 길이(띄어쓰기 뺀 글자 수)
+            "short_len": 10,
+
+            # 이만큼 지나면 묻던 것을 잊는다(초)
+            "ttl_sec": 600,
         },
 
         "chess": {

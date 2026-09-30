@@ -183,6 +183,7 @@ def main():
     print()
     show("아바타", h.get("avatar"), "다이아가 안 나옵니다")
     show("겹치기 몸", h.get("body"), "옷 안이 텅 비어 보입니다")
+    show("옷장", h.get("wardrobe"), "속옷 차림으로 시작합니다 (옷 파일 이름이 한글인지 보세요)")
 
     print("  %-10s %s" % ("저장소", h.get("store")))
 
