@@ -230,7 +230,10 @@ with app.test_client() as c:
     ok(r["ok"] and r["open"] is False and r["winner"] == "b",
        "사람이 이긴다", r.get("winner"))
     ok(r.get("again") == "gomoku", "한 판 더 할지 묻는다 (again)", r.get("again"))
-    ok("한 판 더" in (r.get("reply") or ""), "말에 '한 판 더' 가 있다", r.get("reply"))
+    # 2026-10-01: 끝난 판의 말(한 판 더 포함)은 다이아가 그때 마음으로 한다.
+    # 정해 둔 대사 대신 사건이 실려 오고, 한 판 더 물을 차례라는 것도 같이 간다.
+    ok((r.get("event") or {}).get("again") is True and not r.get("reply"),
+       "끝난 판은 다이아에게 넘긴다 (event.again)", r.get("event"))
 
     c.post("/api/gomoku/new", json={"first": "you"})
     r = c.post("/api/gomoku/resign").get_json()
@@ -275,7 +278,7 @@ with app.test_client() as c:
     ok(not r.get("reply"), "'먼저 뒤집으세요' 를 안 한다", r.get("reply"))
 
     r = c.post("/api/halli/new", json={"first": "you"}).get_json()
-    ok(r["turn"] == "you" and r.get("reply"), "사람이 먼저면 사람 차례", r.get("turn"))
+    ok(r["turn"] == "you", "사람이 먼저면 사람 차례", r.get("turn"))
 
     # 다이아가 뒤집을 패가 없는 판 — 뒤집으면 다이아가 진다
     g = dict(r)
@@ -337,7 +340,8 @@ with app.test_client() as c:
     r = c.post("/api/chess/move", json={"move": "a1a8"}).get_json()
     ok(r["ok"] and r.get("over"), "메이트로 끝난다", r.get("over"))
     ok(r.get("again") == "chess", "한 판 더 할지 묻는다 (again)", r.get("again"))
-    ok("한 판 더" in (r.get("line") or ""), "말에 '한 판 더' 가 있다", r.get("line"))
+    ok((r.get("event") or {}).get("again") is True and not r.get("line"),
+       "끝난 판은 다이아에게 넘긴다 (event.again)", r.get("event"))
 
 
 print()

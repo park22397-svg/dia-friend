@@ -82,7 +82,9 @@ with app.test_client() as c:
        "판이 8x8 로 온다")
     ok(r["rows"][0] == "rnbqkbnr" and r["rows"][7] == "RNBQKBNR",
        "처음 놓임이 맞다", r["rows"][0] + " / " + r["rows"][7])
-    ok(bool(r.get("line")), "판을 열며 말을 건다", r.get("line"))
+    # 2026-10-01: 판을 여는 것은 몸으로만 반응한다(정해 둔 대사 없음)
+    ok(not r.get("line") and r.get("expression"), "판을 열면 얼굴로 반응한다",
+       (r.get("line"), r.get("expression")))
 
     r2 = c.get("/api/chess/state").get_json()
     ok(r2["playing"] and r2["fen"] == r["fen"],
@@ -158,7 +160,10 @@ with app.test_client() as c:
 
     r = c.post("/api/chess/move", json={"move": "a1a8"}).get_json()
     ok(r["ok"] and r.get("over"), "체크메이트를 알아본다", r)
-    ok(bool(r.get("line")), "지고 나서 말을 한다", r.get("line"))
+    # 2026-10-01: 끝난 판의 말은 다이아가 한다 — 사건이 실려 온다
+    ev = r.get("event") or {}
+    ok(ev.get("kind") == "lose" and ev.get("weight") == "big",
+       "지면 다이아에게 넘긴다 (event)", ev)
 
     r = c.post("/api/chess/resign", methods=None) if False else \
         c.post("/api/chess/resign").get_json()
@@ -387,18 +392,16 @@ with app.test_client() as c:
     # 점수를 그대로 주면 사람이 안 하는 말이 나온다
     ok("점" not in (note or ""), "점수를 숫자로 말하지 않는다", note)
 
+    # 2026-10-01: 판 위의 일에 대한 말은 정해 둔 대사가 아니라 다이아가
+    # 그때 마음으로 한다(/api/dia/react). 그래서 표 대사가 기록에 남지 않는다.
     hist = _msgs_chess(c.get("/api/history").get_json())
-    ok(len(hist) > 0, "체스에서 한 말이 대화 기록에 남는다", len(hist))
-    # 낱말로 찾으면 안 된다. 대사는 여럿 중 하나가 무작위로 나오는데
-    # 어떤 것에는 그 낱말이 없다 - 실제로 그래서 검사가 오락가락했다.
-    # 체스 표에 적힌 말 중 하나인지로 본다.
     said = set()
     for ev in GAMES.chess().get("events", {}).values():
         for pool in (ev.get("lines") or {}).values():
             said.update(pool)
 
-    ok(any(h.get("content") in said for h in hist),
-       "남은 것이 체스 표에 있는 말이다", hist[:2])
+    ok(not any(h.get("content") in said for h in hist),
+       "체스 표 대사가 기록에 남지 않는다", hist[:2])
 
 
 print()

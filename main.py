@@ -37,6 +37,20 @@ from dia.relation import stage_now as _stage_now  # noqa: E402
 # 놀이는 시스템 쪽이다.
 from system.games import GAMES  # noqa: E402
 from system.world import WORLD  # noqa: E402
+from system.world_state import (  # noqa: E402
+    SLOT_LABEL,
+    SLOT_ORDER,
+    _places_now,
+    _place_here,
+    _scene_now,
+    _scene_set,
+    _scene_update,
+    _wardrobe_items,
+    _slot_of,
+    _wardrobe_now,
+    _worn_map,
+    _worn_now,
+)
 
 app = Flask(__name__)
 
@@ -531,6 +545,41 @@ def chat_api():
 # ============================================================
 # 대화 기록 조회 API
 # ============================================================
+
+# ============================================================
+# 다이아의 반응 — 판에서 일어난 일에
+#
+# 놀이 경로가 답에 "event" 를 실어 보내면 화면이 그것을 이리로 돌려준다.
+# 판은 기다리지 않고 먼저 움직이고, 다이아의 말은 조금 뒤에 온다.
+# 화면이 준 사건은 믿지 않는다 — 놀이 이름과 일의 종류만 받아 서버 표로
+# 다시 짓는다(events.rebuild).
+# ============================================================
+
+@app.route("/api/dia/react", methods=["POST"])
+def dia_react_api():
+    from dia import mind as MIND
+    from system.games import events as EV
+
+    data = request.get_json(silent=True) or {}
+    ev = EV.rebuild(data.get("event"))
+
+    if ev is None:
+        return jsonify({"ok": False, "error": "그런 일은 없습니다."}), 400
+
+    got = MIND.react(ev)
+
+    if not got.get("ok"):
+        return jsonify({"ok": False, "why": got.get("why")})
+
+    return jsonify({
+        "ok": True,
+        "reply": got["reply"],
+        "expression": got["expression"],
+        "cues": got["cues"],
+        "feel": got.get("feel"),
+        "event": {"game": ev["game"], "kind": ev["kind"]},
+    })
+
 
 @app.route(
     "/api/history",
@@ -2048,40 +2097,8 @@ def background_api():
     )
 
 
-def _places_now():
-    """지금 갈 수 있는 곳 이름들. 배경 폴더를 그대로 훑는다."""
-    conf = (WORLD.model or {}).get("background", {}) or {}
-
-    if not WORLD.places_conf().get("enabled", True):
-        return []
-
-    folder = conf.get("dir", "static/background")
-    types = tuple(t.lower() for t in conf.get(
-        "types", [".png", ".jpg", ".jpeg", ".webp", ".gif"]))
-
-    base = os.path.join(os.path.dirname(os.path.abspath(__file__)), folder)
-
-    try:
-        names = [f for f in os.listdir(base) if f.lower().endswith(types)]
-    except OSError:
-        return []
-
-    out = []
-
-    for n in names:
-        p = WORLD.place_of_file(n)
-        if p and p not in out:
-            out.append(p)
-
-    return sorted(out)
 
 
-def _place_here():
-    """지금 있는 곳. 없으면 None."""
-    try:
-        return (memory_manager.load_memory_data().get("place") or {}).get("name")
-    except Exception:
-        return None
 
 
 def _place_go(name):
@@ -2141,78 +2158,10 @@ def _place_image(name):
 # 노래가 이어져야 한다.
 # ============================================================
 
-def _scene_now():
-    """지금 열려 있는 장면. 없으면 None."""
-    try:
-        key = (memory_manager.load_memory_data().get("scene") or {}).get("key")
-    except Exception:
-        return None
-
-    return WORLD.scene(key) if key else None
 
 
-def _scene_set(key):
-    data = memory_manager.load_memory_data()
-
-    if key:
-        data["scene"] = {"key": key, "since": time.time()}
-    else:
-        data.pop("scene", None)
-
-    memory_manager.save_memory_data(data)
 
 
-def _scene_update(user_text, here=None):
-    """이번 말과 있는 곳을 보고 장면을 열거나 닫는다. 지금 장면을 돌려준다.
-
-    **여는 길이 셋인 이유.** 사람은 한 가지 방식으로만 자리를
-    옮기지 않는다.
-
-      "노래방 왔어"        — 말로 알린다
-      (배경: 노래방)       — 정말로 그리로 갔다
-      노래방에 있는 채로    — 이미 와 있다
-
-    셋 다 '알아챘다' 로 쳐야 알아챈 것이다. 하나만 받으면
-    나머지 두 길에서는 못 알아듣는 바보가 된다.
-
-    닫는 것은 말로만 한다. 시간이 지나면 저절로 닫히게 하면,
-    노래를 부르다 말고 한참 이야기한 뒤 다시 부를 때 못 부른다.
-    """
-    now = _scene_now()
-
-    # 그만하자고 했다
-    if WORLD.scene_leaves(user_text):
-        if now:
-            print(f"[장면]: {now.get('label')} 끝")
-            _scene_set(None)
-        return None
-
-    # 말로 알렸다
-    want = WORLD.scene_of_words(user_text)
-
-    # 그 자리에 있다
-    if not want:
-        want = WORLD.scene_of_place(here if here is not None else _place_here())
-
-    if want:
-        if not now or now.get("key") != want.get("key"):
-            print(f"[장면]: {(now or {}).get('label') or '없음'}"
-                  f" -> {want.get('label')}")
-            _scene_set(want.get("key"))
-        return want
-
-    # 다른 곳으로 옮겨 갔으면 그 자리의 일은 끝난 것이다.
-    #
-    # 노래방에서 공원으로 갔는데 마이크를 들고 있으면 안 된다.
-    if now and now.get("places"):
-        h = here if here is not None else _place_here()
-
-        if h and not WORLD.scene_of_place(h):
-            print(f"[장면]: {now.get('label')} 끝 (자리를 옮김)")
-            _scene_set(None)
-            return None
-
-    return now
 
 
 def _apply_song(result):
@@ -2307,34 +2256,11 @@ def _apply_shoot(result):
     return result
 
 
-def _wardrobe_items():
-    """옷장에 실제로 걸려 있는 옷들. [{key,label,file,...}]"""
-    conf = (WORLD.model or {}).get("wardrobe_dir", "static/wardrobe")
-    base = os.path.join(os.path.dirname(os.path.abspath(__file__)), conf)
-
-    try:
-        with open(os.path.join(base, "wardrobe.json"), encoding="utf-8") as f:
-            items = json.load(f).get("items", [])
-    except FileNotFoundError:
-        return []
-    except Exception as e:
-        print(f"[옷장 읽기 오류]: {e}")
-        return []
-
-    return [it for it in items
-            if it.get("file")
-            and os.path.exists(os.path.join(base, it["file"]))]
 
 
-# 칸 차례. 화면과 프롬프트에 이 순서로 적는다.
-SLOT_ORDER = ("outfit", "glasses", "hair")
-
-SLOT_LABEL = {"outfit": "옷", "glasses": "안경", "hair": "머리"}
+# 옷 칸 차례와 이름표는 system/world_state.py 에 있다(SLOT_ORDER·SLOT_LABEL).
 
 
-def _slot_of(item):
-    """그 물건이 걸리는 칸. 옛 wardrobe.json 에는 없을 수 있다."""
-    return item.get("slot") or "outfit"
 
 
 def _slot_of_key(key):
@@ -2344,60 +2270,10 @@ def _slot_of_key(key):
     return None
 
 
-def _wardrobe_now():
-    """프롬프트에 적을 목록. 칸 이름을 같이 준다."""
-    out = []
-
-    for it in _wardrobe_items():
-        slot = _slot_of(it)
-        out.append({
-            "key": it.get("key"),
-            "label": it.get("label") or it.get("key"),
-            "slot": slot,
-            "slot_label": it.get("slot_label") or SLOT_LABEL.get(slot, slot),
-        })
-
-    return out
 
 
-def _worn_map(items=None):
-    """칸마다 무엇을 입고 있는가. {칸: 이름}
-
-    처음 온 사람(적힌 것이 없음)에게는 **옷 칸만** 기본을 입힌다.
-    안경과 머리는 안 씌운다 — 처음부터 안경을 씌우면 그건 기본 얼굴이
-    아니라 설정이다.
-
-    옷장에서 사라진 것을 입고 있었으면 벗긴다.
-    """
-    items = _wardrobe_items() if items is None else items
-    saved = memory_manager.load_wearing()
-
-    by_slot = {}
-    for it in items:
-        by_slot.setdefault(_slot_of(it), []).append(it.get("key"))
-
-    out = {}
-
-    for slot in SLOT_ORDER:
-        keys = by_slot.get(slot) or []
-        got = saved.get(slot)
-
-        if got is None:
-            # 아직 아무것도 안 정했다
-            out[slot] = keys[0] if (slot == "outfit" and keys) else ""
-        elif got and got not in keys:
-            print(f"[옷장] {slot} 칸의 '{got}' 이(가) 없어졌다")
-            out[slot] = keys[0] if (slot == "outfit" and keys) else ""
-        else:
-            out[slot] = got
-
-    return out
 
 
-def _worn_now():
-    """프롬프트에 적을 '지금 입은 것' 목록. 아무것도 없으면 None."""
-    worn = [v for k, v in _worn_map().items() if v]
-    return worn or None
 
 
 def _apply_wear(result):

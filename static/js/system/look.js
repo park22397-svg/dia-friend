@@ -719,7 +719,10 @@
 
                 // 낸 뒤에 말한다
                 setTimeout(() => {
-                    showReply(data.reply, data.expression || 'neutral', null);
+                    // 결과에 대한 말은 다이아가 따로 한다(사건 → dia/react.js).
+                    // 여기서는 얼굴만.
+                    if (data.reply) showReply(data.reply, data.expression || 'neutral', null);
+                    else if (data.expression) applyExpression(data.expression);
 
                     if (typeof data.affinity === 'number') {
                         myAffinity = data.affinity;

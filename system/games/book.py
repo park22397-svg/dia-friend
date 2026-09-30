@@ -22,6 +22,22 @@ class GameBook:
     def motion(self, key):
         return self.body.motion(key) if self.body is not None else None
 
+    def _as_event(self, game, kind, out, **fmt):
+        """사건 표(events.py)에 있는 일이면 대사를 비우고 사건으로 적는다.
+
+        말은 다이아가 그때 마음으로 한다(/api/dia/react). 얼굴·몸짓·호감은
+        그대로 둔다 — 몸은 바로 반응하고, 사이는 시스템이 정한다.
+        """
+        from system.games import events as EV
+
+        if out is None or not EV.lookup(game, kind):
+            return out
+
+        EV.record(game, kind, **fmt)
+        out = dict(out)
+        out["line"] = None
+        return out
+
     # --------------------------------------------------------
     # 가위바위보
     #
@@ -247,12 +263,14 @@ class GameBook:
             except (KeyError, IndexError):
                 pass
 
-        return {
+        out = {
             "line": line,
             "expression": spec.get("expression"),
             "motion": spec.get("motion"),
             "affinity": int(spec.get("affinity", 0)),
         }
+        return self._as_event("janggi", kind, out, **fmt)
+
 
     def jg_note(self, game):
         """장기 상황을 프롬프트에 한 줄로. 체스판과 같은 방식이다."""
@@ -310,12 +328,14 @@ class GameBook:
             except (KeyError, IndexError):
                 pass
 
-        return {
+        out = {
             "line": line,
             "expression": spec.get("expression"),
             "motion": spec.get("motion"),
             "affinity": int(spec.get("affinity", 0)),
         }
+        return self._as_event("halli", kind, out, **fmt)
+
 
     def hg_note(self, game):
         """할리갈리 상황을 프롬프트에 한 줄로."""
@@ -382,12 +402,14 @@ class GameBook:
             except (KeyError, IndexError):
                 pass
 
-        return {
+        out = {
             "line": line,
             "expression": spec.get("expression"),
             "motion": spec.get("motion"),
             "affinity": int(spec.get("affinity", 0)),
         }
+        return self._as_event("gomoku", kind, out, **fmt)
+
 
     def go_note(self, game):
         """오목 상황을 프롬프트에 한 줄로. 체스판과 같은 방식이다."""
@@ -613,7 +635,20 @@ class GameBook:
         return self.game.get("again", {})
 
     def again_say(self, kind, stage=None, rng=None):
-        """한 판 더. kind: ask / yes / no"""
+        """한 판 더. kind: ask / yes / no
+
+        판이 방금 끝나 다이아가 직접 말할 참이면(사건이 적혀 있으면)
+        '한 판 더 할래?' 를 따로 붙이지 않는다. 그 말까지 다이아가 할지
+        말지 정한다 — 붙여 두면 반응보다 묻는 말이 먼저 나온다.
+        """
+        from system.games import events as EV
+
+        if kind == "ask":
+            ev = EV.pending()
+            if ev and ev.get("weight") == "big":
+                ev["again"] = True
+                return {"line": None, "expression": None}
+
         return self._game_line(self.again_conf().get(kind), stage, rng)
 
     def again_answer(self, text):
@@ -666,7 +701,7 @@ class GameBook:
         }
 
         if rng.random() > float(ev.get("say", 1.0)):
-            return out
+            return self._as_event("chess", event, out)
 
         lines = ev.get("lines", {})
         tone = "polite" if self._polite(stage) else "casual"
@@ -675,7 +710,7 @@ class GameBook:
         if pool:
             out["line"] = rng.choice(list(pool))
 
-        return out
+        return self._as_event("chess", event, out)
 
     def _polite(self, stage):
         """존대로 말할 사이인가.

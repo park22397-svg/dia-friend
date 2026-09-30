@@ -17,6 +17,31 @@ from system.games import GAMES
 bp = Blueprint("games", __name__)
 
 
+@bp.after_request
+def _attach_event(response):
+    """판에서 일어난 일(events.record)을 답에 "event" 로 실어 보낸다.
+
+    화면은 이것을 받아 다이아에게 넘기고(/api/dia/react), 다이아가
+    그때 마음으로 말한다. 판은 기다리지 않고 바로 움직인다.
+    """
+    from system.games import events as EV
+
+    ev = EV.pending()
+    if not ev or response.mimetype != "application/json":
+        return response
+
+    try:
+        import json as _json
+        data = response.get_json(silent=True)
+        if isinstance(data, dict):
+            data["event"] = ev
+            response.set_data(_json.dumps(data, ensure_ascii=False))
+    except Exception as e:
+        print(f"[놀이 사건 싣기 오류]: {e}")
+
+    return response
+
+
 @bp.route(
     "/api/rps",
     methods=["POST"]
@@ -82,17 +107,23 @@ def rps_api():
 
         _rps_tally(result.get("result"))
 
-        # 놀았다는 사실이 대화에도 남아야 다음 말이 이어진다
-        if result["reply"]:
-            try:
-                append_message(
-                    "user",
-                    f"(가위바위보 — 나는 {result['you_label']}, "
-                    f"다이아는 {result['mine_label']})"
-                )
-                append_message("assistant", result["reply"])
-            except Exception as e:
-                print(f"[가위바위보 기록 오류]: {e}")
+        # 놀았다는 사실이 대화에도 남아야 다음 말이 이어진다.
+        #
+        # 결과에 대한 말은 다이아가 그때 마음으로 한다(사건 → /api/dia/react).
+        # 정해 둔 대사(result["reply"])는 더 쓰지 않는다.
+        try:
+            append_message(
+                "user",
+                f"(가위바위보 — 나는 {result['you_label']}, "
+                f"다이아는 {result['mine_label']})"
+            )
+        except Exception as e:
+            print(f"[가위바위보 기록 오류]: {e}")
+
+        from system.games import events as _EV
+        _EV.record("rps", result.get("result"),
+                   mine=result.get("mine_label"), you=result.get("you_label"))
+        result["reply"] = None
 
         result.update(
             {

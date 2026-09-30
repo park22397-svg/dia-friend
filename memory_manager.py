@@ -295,6 +295,14 @@ def load_memory_data():
     if not isinstance(scene, dict):
         scene = {}
 
+    # 다이아의 마음 — 감정마다 세기, 마지막 속생각(dia/heart.py).
+    #
+    # 같은 함정이다. 여기 안 적으면 저장할 때마다 마음이 비워진다.
+    heart = data.get("heart", {})
+
+    if not isinstance(heart, dict):
+        heart = {}
+
     if not isinstance(conversation, list):
         conversation = []
 
@@ -326,6 +334,7 @@ def load_memory_data():
         "halli": bells,
         "janggi": jg,
         "first": first,
+        "heart": heart,
     }
 
 
@@ -1003,6 +1012,24 @@ def save_mood(raw, since):
     save_memory_data(data)
 
     return data["mood"]
+
+
+def load_heart():
+    """다이아의 마음. dia/heart.py 가 모양을 정한다 — 없으면 빈 dict."""
+
+    heart = load_memory_data().get("heart", {})
+
+    return heart if isinstance(heart, dict) else {}
+
+
+def save_heart(heart):
+    """다이아의 마음을 저장한다."""
+
+    data = load_memory_data()
+    data["heart"] = dict(heart or {})
+    save_memory_data(data)
+
+    return data["heart"]
 
 # ============================================================
 # 지금까지의 기억을 첫 계정에 물려준다
