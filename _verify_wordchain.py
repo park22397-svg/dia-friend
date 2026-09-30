@@ -30,7 +30,7 @@ who.set_current(0)
 store.begin_request()
 
 import ai_brain
-import word_chain as WC
+from system.games import word_chain as WC
 from avatar import AVATAR
 
 STAGE = AVATAR.stage("friend")

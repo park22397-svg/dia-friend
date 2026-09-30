@@ -30,9 +30,10 @@ store.HERE = SANDBOX
 
 import accounts  # noqa: E402
 import chess  # noqa: E402
-import chess_play  # noqa: E402
+from system.games import chess_play  # noqa: E402
 import main  # noqa: E402
-from avatar import AVATAR  # noqa: E402
+from avatar import AVATAR
+from system.games import GAMES  # noqa: E402
 
 accounts.ITERATIONS = 1000
 
@@ -220,7 +221,7 @@ with app.test_client() as c:
     import memory_manager as _m
     _w.set_current(accounts.slot_of("rpsmem"))
 
-    ok(AVATAR.rps_note(None) is None, "안 놀았으면 알려줄 것도 없다")
+    ok(GAMES.rps_note(None) is None, "안 놀았으면 알려줄 것도 없다")
 
     c.post("/api/rps", json={"hand": "rock"})
     c.post("/api/rps", json={"hand": "paper"})
@@ -230,7 +231,7 @@ with app.test_client() as c:
     total = sum(int(tally.get(k, 0)) for k in ("win", "lose", "draw"))
     ok(total == 3, "세 판이 전적에 쌓인다", tally)
 
-    note = AVATAR.rps_note(tally)
+    note = GAMES.rps_note(tally)
     ok(bool(note) and "가위바위보" in note, "전적을 한 줄로 준다", note)
     ok("판" in note, "몇 판 했는지 말한다", note)
 
@@ -297,17 +298,17 @@ print("난이도")
 
 import random as _rnd  # noqa: E402
 
-keys = [lv["key"] for lv in AVATAR.chess_levels()]
+keys = [lv["key"] for lv in GAMES.chess_levels()]
 ok(keys == ["easy", "normal", "hard"], "쉬움·보통·어려움 셋", keys)
-ok(AVATAR.chess_level("없는것")["key"] == "normal",
+ok(GAMES.chess_level("없는것")["key"] == "normal",
    "모르는 이름이 오면 기본으로")
 
 
 def duel(white_key, black_key, seed, cap=120):
     """둘을 붙여 본다. 이긴 쪽을 돌려준다."""
     rng = _rnd.Random(seed)
-    w = AVATAR.chess_level(white_key)
-    b = AVATAR.chess_level(black_key)
+    w = GAMES.chess_level(white_key)
+    b = GAMES.chess_level(black_key)
     board = chess.Board()
 
     for _ in range(cap):
@@ -367,7 +368,7 @@ print("다이아가 체스를 두는 줄 아는가")
 with app.test_client() as c:
     signup(c, "knower")
 
-    ok(AVATAR.chess_note(None) is None, "둘 판이 없으면 알려줄 것도 없다")
+    ok(GAMES.chess_note(None) is None, "둘 판이 없으면 알려줄 것도 없다")
 
     c.post("/api/chess/new", json={"level": "easy"})
     c.post("/api/chess/move", json={"move": "e2e4"})
@@ -376,7 +377,7 @@ with app.test_client() as c:
     import memory_manager as _mm
     _who.set_current(accounts.slot_of("knower"))
 
-    note = AVATAR.chess_note(_mm.load_memory_data().get("chess"))
+    note = GAMES.chess_note(_mm.load_memory_data().get("chess"))
 
     ok(bool(note), "판이 있으면 상황을 한 줄로 준다", note)
     ok("체스" in (note or ""), "체스라고 말해 준다", note)
@@ -392,7 +393,7 @@ with app.test_client() as c:
     # 어떤 것에는 그 낱말이 없다 - 실제로 그래서 검사가 오락가락했다.
     # 체스 표에 적힌 말 중 하나인지로 본다.
     said = set()
-    for ev in AVATAR.chess().get("events", {}).values():
+    for ev in GAMES.chess().get("events", {}).values():
         for pool in (ev.get("lines") or {}).values():
             said.update(pool)
 

@@ -9,6 +9,7 @@ import sys
 sys.path.insert(0, ".")
 
 from avatar import AVATAR
+from system.games import GAMES
 
 
 def face(key):
@@ -149,9 +150,9 @@ print()
 print("=" * 74)
 print("5. 가위바위보")
 print("=" * 74)
-for key, spec in (AVATAR.rps().get("outcomes", {}) or {}).items():
+for key, spec in (GAMES.rps().get("outcomes", {}) or {}).items():
     print(f"  {key:<8}표정 {face(spec.get('expression'))}")
-for h in AVATAR.rps_hands():
+for h in GAMES.rps_hands():
     print(f"  {h['label']:<8}동작 {move(h.get('motion'))}  (표정 없음)")
 
 

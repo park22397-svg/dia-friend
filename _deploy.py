@@ -65,7 +65,11 @@ def _token():
 #
 # 검사 스크립트(_verify_*.py)는 뺀다 — 올리지도 않고, 그것만 고쳤을 때
 # 굳이 다시 올릴 이유가 없다.
-WATCH_DIRS = [("", ".py"), ("templates", ".html"), ("static", ".js")]
+#
+# 시스템(system/)과 다이아(dia/)로 나눈 뒤로는 그 폴더들도 본다(2026-09-30).
+WATCH_DIRS = [("", ".py"), ("system", ".py"), ("system/games", ".py"),
+              ("system/games", ".txt"), ("dia", ".py"),
+              ("templates", ".html"), ("static", ".js")]
 
 SKIP_PREFIX = ("_", "build.json")
 

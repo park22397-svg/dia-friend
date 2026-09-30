@@ -26,12 +26,13 @@ import store  # noqa: E402
 store.HERE = SANDBOX
 
 import accounts  # noqa: E402
-import gomoku as GO  # noqa: E402
-import janggi as JG  # noqa: E402
+from system.games import gomoku as GO  # noqa: E402
+from system.games import janggi as JG  # noqa: E402
 import main  # noqa: E402
 import memory_manager  # noqa: E402
 import who  # noqa: E402
-from avatar import AVATAR  # noqa: E402
+from avatar import AVATAR
+from system.games import GAMES  # noqa: E402
 
 accounts.ITERATIONS = 1000
 
@@ -103,7 +104,7 @@ for text, want in [
     ("오늘 뭐 먹었어?", None),
     ("응 근데 오늘 학교에서 있었던 일 말해줄까", None),
 ]:
-    got = AVATAR.again_answer(text)
+    got = GAMES.again_answer(text)
     ok(got == want, f"'{text}' -> {want}", got)
 
 
@@ -112,7 +113,8 @@ print("화면이 놀이 부르는 말을 받는가")
 
 # 화면은 ENTITY.game.<놀이>.triggers 로 "끝말잇기 하자" 를 알아듣는다.
 # 예전에는 rps 만 넘겨서 말로 부른 놀이가 전부 모델에게 갔다.
-game = AVATAR.to_dict().get("game", {})
+# 놀이 설정은 시스템(GAMES)에 있고 /api/avatar 가 다이아 것에 붙여 준다.
+game = GAMES.to_dict()
 for k in ("chess", "gomoku", "halli", "janggi", "word_chain"):
     ok(bool((game.get(k) or {}).get("triggers")), f"{k} 부르는 말이 화면에 간다",
        list(game))
@@ -249,7 +251,7 @@ with app.test_client() as c:
     ok(isinstance(r.get("spot"), int) and isinstance(r.get("from"), int),
        "둔 자리를 알려 준다", (r.get("from"), r.get("spot")))
 
-    you = JG.other(AVATAR.jg_side())
+    you = JG.other(GAMES.jg_side())
     moves = JG.legal_moves(now, you)
     ok(bool(moves), "이어서 사람이 둘 수 있다")
     frm, to = moves[0]
@@ -277,7 +279,7 @@ with app.test_client() as c:
 
     # 다이아가 뒤집을 패가 없는 판 — 뒤집으면 다이아가 진다
     g = dict(r)
-    import halli as HG
+    from system.games import halli as HG
     game = HG.new_game()
     game["turn"] = "dia"
     game["hand"]["dia"] = []
