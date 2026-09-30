@@ -36,6 +36,7 @@ from dia.relation import stage_now as _stage_now  # noqa: E402
 
 # 놀이는 시스템 쪽이다.
 from system.games import GAMES  # noqa: E402
+from system.world import WORLD  # noqa: E402
 
 app = Flask(__name__)
 
@@ -620,6 +621,8 @@ def avatar_api():
         # 화면은 예전처럼 ENTITY.game 으로 읽는다.
         d = AVATAR.to_dict()
         d["game"] = GAMES.to_dict()
+        # 장소·옷장·꾸미기·장면 설정(시스템)도 예전 자리(model)에 붙인다
+        d["model"] = {**(d.get("model") or {}), **WORLD.model}
 
         return jsonify(d)
 
@@ -1800,7 +1803,7 @@ def wardrobe_api():
     옷 수만큼 두면 한 벌에 16MB 다.
     """
 
-    conf = (AVATAR.model or {}).get("wardrobe_dir", "static/wardrobe")
+    conf = (WORLD.model or {}).get("wardrobe_dir", "static/wardrobe")
     base = os.path.join(os.path.dirname(os.path.abspath(__file__)), conf)
     book = os.path.join(base, "wardrobe.json")
 
@@ -1869,7 +1872,7 @@ def wardrobe_wear_api():
 # ============================================================
 
 def _look_conf():
-    return ((AVATAR.model or {}).get("look") or {})
+    return ((WORLD.model or {}).get("look") or {})
 
 
 def _look_keys(part):
@@ -1943,7 +1946,7 @@ def background_api():
 
     import os
 
-    conf = (AVATAR.model or {}).get("background", {}) or {}
+    conf = (WORLD.model or {}).get("background", {}) or {}
 
     folder = conf.get("dir", "static/background")
     prefix = conf.get("url_prefix", "/static/background/")
@@ -1985,7 +1988,7 @@ def background_api():
     places = {}
 
     for img in images:
-        places.setdefault(AVATAR.place_of_file(img["name"]), []).append(img)
+        places.setdefault(WORLD.place_of_file(img["name"]), []).append(img)
 
     # 어디서 시작하는가.
     #
@@ -2011,7 +2014,7 @@ def background_api():
     else:
         here = None
 
-        start = AVATAR.places_conf().get("start")
+        start = WORLD.places_conf().get("start")
 
         if start and start in places:
             current = places[start][0]
@@ -2025,7 +2028,7 @@ def background_api():
         hit = next((i for i in images if i["name"] == want), None)
         if hit:
             current = hit
-            here = AVATAR.place_of_file(hit["name"])
+            here = WORLD.place_of_file(hit["name"])
         else:
             print(f"[배경] prefer 로 적은 '{want}' 을(를) 못 찾았습니다.")
 
@@ -2047,9 +2050,9 @@ def background_api():
 
 def _places_now():
     """지금 갈 수 있는 곳 이름들. 배경 폴더를 그대로 훑는다."""
-    conf = (AVATAR.model or {}).get("background", {}) or {}
+    conf = (WORLD.model or {}).get("background", {}) or {}
 
-    if not AVATAR.places_conf().get("enabled", True):
+    if not WORLD.places_conf().get("enabled", True):
         return []
 
     folder = conf.get("dir", "static/background")
@@ -2066,7 +2069,7 @@ def _places_now():
     out = []
 
     for n in names:
-        p = AVATAR.place_of_file(n)
+        p = WORLD.place_of_file(n)
         if p and p not in out:
             out.append(p)
 
@@ -2102,7 +2105,7 @@ def _place_image(name):
     import random as _rnd
     from urllib.parse import quote
 
-    conf = (AVATAR.model or {}).get("background", {}) or {}
+    conf = (WORLD.model or {}).get("background", {}) or {}
     prefix = conf.get("url_prefix", "/static/background/")
     folder = conf.get("dir", "static/background")
     types = tuple(t.lower() for t in conf.get(
@@ -2113,7 +2116,7 @@ def _place_image(name):
     try:
         hits = [f for f in sorted(os.listdir(base))
                 if f.lower().endswith(types)
-                and AVATAR.place_of_file(f) == name]
+                and WORLD.place_of_file(f) == name]
     except OSError:
         hits = []
 
@@ -2145,7 +2148,7 @@ def _scene_now():
     except Exception:
         return None
 
-    return AVATAR.scene(key) if key else None
+    return WORLD.scene(key) if key else None
 
 
 def _scene_set(key):
@@ -2178,18 +2181,18 @@ def _scene_update(user_text, here=None):
     now = _scene_now()
 
     # 그만하자고 했다
-    if AVATAR.scene_leaves(user_text):
+    if WORLD.scene_leaves(user_text):
         if now:
             print(f"[장면]: {now.get('label')} 끝")
             _scene_set(None)
         return None
 
     # 말로 알렸다
-    want = AVATAR.scene_of_words(user_text)
+    want = WORLD.scene_of_words(user_text)
 
     # 그 자리에 있다
     if not want:
-        want = AVATAR.scene_of_place(here if here is not None else _place_here())
+        want = WORLD.scene_of_place(here if here is not None else _place_here())
 
     if want:
         if not now or now.get("key") != want.get("key"):
@@ -2204,7 +2207,7 @@ def _scene_update(user_text, here=None):
     if now and now.get("places"):
         h = here if here is not None else _place_here()
 
-        if h and not AVATAR.scene_of_place(h):
+        if h and not WORLD.scene_of_place(h):
             print(f"[장면]: {now.get('label')} 끝 (자리를 옮김)")
             _scene_set(None)
             return None
@@ -2291,7 +2294,7 @@ def _apply_shoot(result):
 
     result["cues"] = keep
 
-    shot = AVATAR.shot_conf()
+    shot = WORLD.shot_conf()
 
     if not shot:
         return result
@@ -2306,7 +2309,7 @@ def _apply_shoot(result):
 
 def _wardrobe_items():
     """옷장에 실제로 걸려 있는 옷들. [{key,label,file,...}]"""
-    conf = (AVATAR.model or {}).get("wardrobe_dir", "static/wardrobe")
+    conf = (WORLD.model or {}).get("wardrobe_dir", "static/wardrobe")
     base = os.path.join(os.path.dirname(os.path.abspath(__file__)), conf)
 
     try:
@@ -2440,18 +2443,18 @@ def _apply_wear(result):
         off_slot = None
 
         for k in keys:
-            if k and want.startswith(k) and AVATAR.wear_is_off(want[len(k):]):
+            if k and want.startswith(k) and WORLD.wear_is_off(want[len(k):]):
                 off_slot = _slot_of_key(k)
                 break
 
         if off_slot is None:
             for slot, label in SLOT_LABEL.items():
-                if want.startswith(label) and AVATAR.wear_is_off(want[len(label):]):
+                if want.startswith(label) and WORLD.wear_is_off(want[len(label):]):
                     off_slot = slot
                     break
 
         # 그냥 '벗기' 면 옷을 벗는 것이다
-        if off_slot is None and AVATAR.wear_is_off(want):
+        if off_slot is None and WORLD.wear_is_off(want):
             off_slot = "outfit"
 
         if off_slot:
@@ -2500,7 +2503,7 @@ def _apply_wear(result):
     keys = [it.get("key") for it in _wardrobe_items()]
 
     # 벗으라는 말
-    if AVATAR.wear_is_off(want):
+    if WORLD.wear_is_off(want):
         if here is None:
             return result
         memory_manager.save_wearing("")
@@ -2664,7 +2667,7 @@ def nowplaying_get_api():
     return jsonify({
         "ok": True,
         "now": media,
-        "note": AVATAR.media_note(media),
+        "note": WORLD.media_note(media),
     })
 
 

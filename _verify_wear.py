@@ -33,6 +33,7 @@ import main
 import memory_manager
 from ai_brain import extract_cues
 from avatar import AVATAR
+from system.world import WORLD
 
 app = main.app
 app.config["TESTING"] = True
@@ -150,20 +151,21 @@ with app.test_client() as c:
 
 print("\n3. 프롬프트")
 
+# 옷장 글은 시스템(WORLD)이 만들고 다이아는 받아서 끼운다
 p = AVATAR.system_prompt(stage=AVATAR.stage("friend"),
-                         wardrobe=main._wardrobe_now(),
-                         worn=[FIRST])
+                         world_blocks=[WORLD.wardrobe_block(main._wardrobe_now(),
+                                                            [FIRST])])
 
 ok("[네 옷장]" in p, "옷장이 프롬프트에 실린다")
 ok(FIRST in p, "옷 이름이 실린다")
 ok("(옷: 교복) 처럼" in p, "어떻게 적는지 알려 준다")
 ok("(지금)" in p, "지금 걸친 것을 표시한다")
 
-note = AVATAR.wear_note([FIRST])
+note = WORLD.wear_note([FIRST])
 ok(note and FIRST in note, "무엇을 입고 있는지 한 줄로 준다", note)
 
 # 옷장이 비면 블록이 아예 없어야 한다 (빈 목록을 적어 주면 헷갈린다)
-ok(AVATAR.wardrobe_block([], None) is None, "옷장이 비면 안 적는다")
+ok(WORLD.wardrobe_block([], None) is None, "옷장이 비면 안 적는다")
 
 
 print("\n" + "=" * 60)

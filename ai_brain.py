@@ -7,6 +7,7 @@ import requests
 
 from avatar import AVATAR, is_emoji
 from system.games import GAMES
+from system.world import WORLD
 import config
 from config import (
     MAX_HISTORY_MESSAGES,
@@ -134,7 +135,7 @@ def extract_cues(text):
             # 갈 수 없는 곳이면 부르는 쪽에서 버린다. 없는 곳으로
             # 옮기는 시늉을 하면 말과 화면이 어긋난다.
             # 옷 갈아입기 표시. 장소와 똑같이 다룬다.
-            want_wear = AVATAR.wear_marker(inner)
+            want_wear = WORLD.wear_marker(inner)
 
             if want_wear:
                 cues.append({
@@ -167,7 +168,7 @@ def extract_cues(text):
                 continue
 
             # 사진을 찍자. (찍자)
-            if AVATAR.is_shoot(inner):
+            if WORLD.is_shoot(inner):
                 cues.append({
                     "at": len(out),
                     "type": "shoot",
@@ -177,7 +178,7 @@ def extract_cues(text):
                     i += 1
                 continue
 
-            want_place = AVATAR.place_marker(inner)
+            want_place = WORLD.place_marker(inner)
 
             if want_place:
                 # at 은 안 쓰지만 적어 둔다. 아래에서 모든 표시의
@@ -799,11 +800,17 @@ def process_chat(user_text, seeing=None, cut_off=False, woke=False):
         print(f"[옷장 읽기 오류]: {e}")
         _wardrobe, _worn = [], None
 
+    # 갈 수 있는 곳·입을 수 있는 옷은 시스템(WORLD)이 글로 만들고,
+    # 다이아는 받아서 프롬프트에 끼운다.
+    _world_blocks = [
+        b for b in (
+            WORLD.places_block(_places, _here) if _places else None,
+            WORLD.wardrobe_block(_wardrobe, _worn) if _wardrobe else None,
+        ) if b
+    ]
+
     system_prompt = AVATAR.system_prompt(
-        places=_places,
-        here=_here,
-        wardrobe=_wardrobe,
-        worn=_worn,
+        world_blocks=_world_blocks,
         stage=stage,
         transition=transition,
         mood=mood_now,
@@ -890,7 +897,7 @@ def process_chat(user_text, seeing=None, cut_off=False, woke=False):
     # 있으면서 "우리 공원 갈까?" 라고 한다.
     #
     # 프롬프트에 이어 붙이지 않는다 — 그러면 말투 지시가 끝에서 밀린다.
-    _wh = AVATAR.place_note(_here)
+    _wh = WORLD.place_note(_here)
 
     if _wh:
         messages.append({
@@ -902,7 +909,7 @@ def process_chat(user_text, seeing=None, cut_off=False, woke=False):
     #
     # 있는 곳과 같은 이유다. 안 주면 교복을 입고 있으면서
     # "교복 입어 볼까?" 라고 한다.
-    _wr = AVATAR.wear_note(_worn)
+    _wr = WORLD.wear_note(_worn)
 
     if _wr:
         messages.append({
@@ -923,7 +930,7 @@ def process_chat(user_text, seeing=None, cut_off=False, woke=False):
         print(f"[지금 나오는 것 읽기 오류]: {e}")
         _media = None
 
-    _mn = AVATAR.media_note(_media)
+    _mn = WORLD.media_note(_media)
 
     if _mn:
         messages.append({
@@ -949,7 +956,7 @@ def process_chat(user_text, seeing=None, cut_off=False, woke=False):
         _scene = None
 
     if _scene:
-        _sn = AVATAR.scene_note(_scene)
+        _sn = WORLD.scene_note(_scene)
 
         if _sn:
             messages.append({
@@ -957,7 +964,7 @@ def process_chat(user_text, seeing=None, cut_off=False, woke=False):
                 "content": f"[지금 하는 일] {_sn}",
             })
 
-        _sb = AVATAR.scene_block(_scene)
+        _sb = WORLD.scene_block(_scene)
 
         if _sb:
             messages.append({"role": "system", "content": _sb})
