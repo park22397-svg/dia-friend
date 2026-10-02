@@ -83,9 +83,7 @@
 
             // 소리를 내고, 그 길이에 입과 말풍선을 맞춘다.
             //
-            // 브라우저 목소리는 미리 길이를 알 수 없어 0 이 온다.
-            // 그때는 어림값 그대로 둔다 — 대신 첫 문장을 말해 보고
-            // 잰 속도(voice.msPerChar)가 다음 문장부터 반영된다.
+            // 소리를 못 받으면 0 이 온다. 그때는 어림값 그대로 둔다.
             speak(spoken).then(ms => {
                 playLipSync(spoken, ms);
                 if (ms > 0) armBubbleHide(ms);

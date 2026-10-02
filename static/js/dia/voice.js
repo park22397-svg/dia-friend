@@ -8,11 +8,10 @@
         // ============================================================
         // 목소리
         //
-        // 소리를 어디서 만들지는 서버가 정한다.
-        //   browser — 브라우저에 들어 있는 한국어 목소리로 여기서 읽는다
-        //   gemini  — 서버가 만든 소리를 받아 튼다 (아케르나르)
+        // 서버가 Gemini 레다(Leda)로 만든 소리를 받아 튼다. 다른 목소리
+        // (브라우저 기계음·Edge)는 없다 — 못 받으면 그 말은 조용하다.
         //
-        // 어느 쪽이든 입 모양은 '실제로 소리가 나는 길이'에 맞춘다.
+        // 입 모양은 '실제로 소리가 나는 길이'에 맞춘다.
         // 예전에는 글자당 0.1초로 고정이라, 소리가 끝났는데 입만 계속
         // 움직이거나 그 반대가 되는 일이 있었다.
         // ============================================================
@@ -26,12 +25,9 @@
             // 서버를 아예 안 부르니 좋은 목소리가 있어도 소용이 없었다.
             // 서버가 꺼졌다 켜지는 사이에 새로고침하면 그렇게 됐다.
             provider: null,
+            name: '',            // 목소리 이름 (레다)
             // 서버가 실제로 답을 준 적이 있는가
             asked: false,
-            lang: 'ko-KR',
-            rate: 1.0,
-            pitch: 1.05,
-            pick: null,          // 브라우저 목소리 하나
             audio: null,         // 지금 나고 있는 소리
             // 한 글자를 읽는 데 실제로 걸리는 시간(ms).
             // 첫 문장을 말해 보고 재서 채운다. 그전에는 0 이다.
@@ -47,13 +43,12 @@
                 const d = await fetch('/api/tts/config').then(r => r.json());
 
                 voice.on = d.enabled !== false;
-                voice.provider = d.provider || 'browser';
-                voice.lang = d.lang || 'ko-KR';
-                voice.rate = d.rate || 1.0;
-                voice.pitch = d.pitch || 1.05;
+                voice.provider = d.provider || 'gemini';
+                voice.name = d.voice || '';
                 voice.asked = true;
 
-                console.log('[diamondAI] 목소리: ' + voice.provider);
+                console.log('[diamondAI] 목소리: ' + voice.provider
+                    + ' ' + voice.name);
 
                 return true;
 
@@ -65,36 +60,10 @@
             }
         }
 
-        function pickBrowserVoice() {
-            if (!window.speechSynthesis) return;
-
-            const all = speechSynthesis.getVoices();
-            if (!all.length) return;      // 아직 안 불려왔다. onvoiceschanged 가 다시 부른다
-
-            const ko = all.filter(v => (v.lang || '').toLowerCase().startsWith('ko'));
-
-            // 한국어 중에서도 여성 목소리를 앞에 둔다
-            const want = ['heami', 'sunhi', 'yuna', 'female', '여성'];
-            ko.sort((a, b) => {
-                const sa = want.findIndex(w => (a.name || '').toLowerCase().includes(w));
-                const sb = want.findIndex(w => (b.name || '').toLowerCase().includes(w));
-                return (sa < 0 ? 9 : sa) - (sb < 0 ? 9 : sb);
-            });
-
-            voice.pick = ko[0] || null;
-        }
-
-        if (window.speechSynthesis) {
-            speechSynthesis.onvoiceschanged = pickBrowserVoice;
-        }
-
         function stopVoice() {
             if (voice.audio) {
                 try { voice.audio.pause(); } catch (e) {}
                 voice.audio = null;
-            }
-            if (window.speechSynthesis) {
-                try { speechSynthesis.cancel(); } catch (e) {}
             }
         }
 
@@ -129,15 +98,12 @@
                 await loadVoice();
             }
 
-            // 서버가 만들어 주는 목소리면 받아서 튼다.
-            //
-            // edge 는 mp3 를 그대로 주므로 바로 틀 수 있고,
+            // 서버가 만든 소리를 받아서 튼다.
             // gemini 는 헤더 없는 PCM 이라 wav 로 싸야 한다.
             //
             // provider 가 아직 null 이면(못 물어봤으면) 그래도 서버를
-            // 불러 본다. 브라우저 목소리는 **서버가 그러라고 했을 때만**
-            // 쓴다 — 기계음은 없느니만 못하다.
-            if (voice.provider !== 'browser') {
+            // 불러 본다.
+            {
                 let d = null;
 
                 try {
@@ -207,17 +173,8 @@
                 }
             }
 
-            // ------------------------------------------------------
-            // 브라우저 목소리는 쓰지 않는다.
-            //
-            // 윈도우 기본 한국어 목소리(Heami)는 기계음이 그대로
-            // 드러난다. 좋은 목소리로 말하다가 한 문장만 그렇게 되면
-            // 안 하느니만 못하다.
-            //
-            // **예비가 실패를 가리고 있었다.** 소리가 나긴 나니까
-            // 어디가 안 되는지 알 수가 없었다. 이제는 안 되면
-            // 조용하고, 콘솔에 왜 그런지 남는다.
-            // ------------------------------------------------------
+            // 다른 목소리로 내려가지 않는다. 예비가 있으면 실패가
+            // 가려진다 — 안 되면 조용하고, 콘솔에 왜 그런지 남는다.
             voice.lastFail = { text: text, at: Date.now() };
 
             return 0;
@@ -415,7 +372,7 @@
         //
         // 예전에는 글자 수 x 0.1초로 박혀 있었다. 실제 말은 글자당
         // 0.15~0.2초라, 긴 문장은 절반쯤 읽다 소리가 통째로 끊겼다.
-        // edge-tts 는 mp3 를 통째로 주므로 틀기 전에 길이를 안다.
+        // 서버가 소리를 통째로 주므로 틀기 전에 길이를 안다.
         // 그 길이가 오면 그것으로 다시 걸고, 못 오면 어림값으로 버틴다.
         // ============================================================
 
@@ -485,7 +442,6 @@
         }
 
         // 소리 길이를 모를 때 한 글자에 잡아 두는 시간(ms).
-        // 브라우저 목소리는 실측값(voice.msPerChar)이 생기면 그쪽을 쓴다.
         const SPEAK_MS_PER_CHAR = 170;
 
         // 소리가 끝나고도 잠깐 더 띄워 둔다. 마지막 소리와 동시에

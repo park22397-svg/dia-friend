@@ -1589,52 +1589,23 @@ def undress_api():
 # ============================================================
 # 목소리
 #
-# 소리를 어디서 만들지는 config 가 정한다.
-#
-#   browser — 화면이 브라우저 목소리로 직접 읽는다. 여기서는 설정만 준다.
-#   gemini  — 서버가 만들어 소리 자체를 내려보낸다. API 키가 필요하다.
-#
-# 화면은 /api/tts/config 로 어느 쪽인지 물어보고,
-# gemini 면 /api/tts 로 문장을 보내 소리를 받아 간다.
+# Gemini 의 레다(Leda) 하나만 쓴다(config 참고). 서버가 소리를 만들어
+# 내려보내고, 화면은 /api/tts 로 문장을 보내 소리를 받아 간다.
+# /api/tts/config 는 켜져 있는지와 목소리 이름만 알려 준다.
 # ============================================================
 
 @app.route("/api/tts/config")
 def tts_config_api():
 
-    from config import (
-        TTS_ENABLED, TTS_PROVIDER, TTS_VOICE,
-        TTS_API_KEY, TTS_RATE, TTS_PITCH,
-    )
-
-    # 쓸 수 없는 것을 적어 두었으면 브라우저로 내려간다.
-    # 그래야 말은 어쨌든 나온다.
-    provider = TTS_PROVIDER
-
-    if provider == "gemini" and not TTS_API_KEY:
-        provider = "browser"
-
-    if provider == "edge":
-        try:
-            import edge_tts  # noqa: F401
-        except ImportError:
-            print("[목소리] edge-tts 가 없어 브라우저 목소리로 갑니다. "
-                  "pip install edge-tts")
-            provider = "browser"
-
-    voice = TTS_VOICE
-    if provider == "edge":
-        from config import TTS_EDGE_VOICE
-        voice = TTS_EDGE_VOICE
+    from config import TTS_ENABLED, TTS_VOICE, TTS_API_KEY
 
     return jsonify(
         {
             "enabled": bool(TTS_ENABLED),
-            "provider": provider,
-            "voice": voice,
-            "rate": TTS_RATE,
-            "pitch": TTS_PITCH,
-            # 브라우저에서 고를 한국어 목소리의 실마리
-            "lang": "ko-KR",
+            "provider": "gemini",
+            "voice": TTS_VOICE,
+            # 열쇠가 없으면 말은 조용히 넘어간다. 화면이 알 수 있게.
+            "ready": bool(TTS_API_KEY),
         }
     )
 
@@ -1643,11 +1614,8 @@ def tts_config_api():
 # 만든 소리를 떠 둔다
 #
 # 같은 말을 또 만들 이유가 없다. 그리고 gemini 는 **분당 몇 번**밖에
-# 못 부른다 — 연달아 부르면 429 로 막히고, 그때마다 화면이 브라우저
-# 기본 목소리(기계음)로 내려간다. 실제로 여덟 번 중 일곱 번이 막혔다.
-#
-# 먼저 말 걸기가 특히 그랬다. 그 말들은 정해진 문장 풀에서 나오는데
-# 매번 새로 만들고 있었다. 떠 두면 두 번째부터는 아예 부르지 않는다.
+# 못 부른다 — 연달아 부르면 429 로 막힌다. 먼저 말 걸기처럼 정해진
+# 문장 풀에서 나오는 말은 떠 두면 두 번째부터는 아예 부르지 않는다.
 #
 # 올린 데서는 파일을 쓸 수 없다. 그때는 조용히 지나간다 —
 # 못 떠 두는 것뿐이지 소리가 안 나는 것은 아니다.
@@ -1689,49 +1657,8 @@ def _voice_cache_put(path, payload):
         pass
 
 
-def _tts_edge(text):
-    """Edge 의 읽어주기 목소리. mp3 로 바로 온다. 실패하면 None."""
-    try:
-        import asyncio
-        import base64
-
-        import edge_tts
-
-        from config import TTS_EDGE_VOICE, TTS_EDGE_RATE, TTS_EDGE_PITCH
-
-        async def make():
-            c = edge_tts.Communicate(
-                text,
-                TTS_EDGE_VOICE,
-                rate=TTS_EDGE_RATE,
-                pitch=TTS_EDGE_PITCH,
-            )
-            buf = b""
-            async for chunk in c.stream():
-                if chunk["type"] == "audio":
-                    buf += chunk["data"]
-            return buf
-
-        audio = asyncio.run(make())
-
-        if not audio:
-            raise RuntimeError("소리가 비었다")
-
-        return {
-            "ok": True,
-            "provider": "edge",
-            "voice": TTS_EDGE_VOICE,
-            "mime": "audio/mpeg",
-            "audio": base64.b64encode(audio).decode("ascii"),
-        }
-
-    except Exception as e:
-        print(f"[목소리 오류 - edge]: {e}")
-        return None
-
-
 def _tts_gemini(text):
-    """Gemini 목소리(아케르나르). 막히거나 실패하면 None."""
+    """Gemini 목소리(레다). 막히거나 실패하면 None."""
     from config import TTS_API_KEY, TTS_MODEL, TTS_STYLE, TTS_VOICE
 
     try:
@@ -1764,8 +1691,8 @@ def _tts_gemini(text):
         )
 
         if res.status_code != 200:
-            # 429 는 분당 할당량이다. 잘못된 것이 아니라 너무 자주 부른 것이다.
-            how = ("분당 할당량을 넘었습니다"
+            # 429 는 할당량이다. 잘못된 것이 아니라 너무 자주 부른 것이다.
+            how = ("할당량을 넘었습니다"
                    if res.status_code == 429 else res.text[:120])
             print(f"[목소리]: gemini HTTP {res.status_code} — {how}")
             return None
@@ -1788,7 +1715,7 @@ def _tts_gemini(text):
 @app.route("/api/tts", methods=["POST"])
 def tts_api():
 
-    from config import TTS_ENABLED, TTS_PROVIDER, TTS_VOICE, TTS_API_KEY
+    from config import TTS_ENABLED, TTS_VOICE, TTS_API_KEY, TTS_STYLE
 
     if not TTS_ENABLED:
         return jsonify({"ok": False, "error": "목소리가 꺼져 있습니다."}), 400
@@ -1800,10 +1727,7 @@ def tts_api():
         return jsonify({"ok": False, "error": "읽을 말이 없습니다."}), 400
 
     # 떠 둔 것이 있으면 그것을 쓴다. 부르지도 않고 기다리지도 않는다.
-    from config import TTS_EDGE_VOICE, TTS_STYLE
-
-    path = _voice_cache_path(TTS_PROVIDER, TTS_VOICE, TTS_EDGE_VOICE,
-                             TTS_STYLE, text)
+    path = _voice_cache_path("gemini", TTS_VOICE, TTS_STYLE, text)
 
     got = _voice_cache_get(path)
 
@@ -1811,29 +1735,14 @@ def tts_api():
         got["cached"] = True
         return jsonify(got)
 
-    out = None
-
-    # ------------------------------------------------------------
-    # 정해진 목소리 하나만 쓴다. 내려가지 않는다.
-    #
-    # 예전에는 막히면 edge 로, 그것도 안 되면 브라우저 기계음으로
-    # 내려갔다. **그 예비가 실패를 가렸다** — 소리가 나긴 나니까
-    # 어디가 안 되는지 알 수가 없었다.
-    #
-    # 이제는 안 되면 안 되는 대로 둔다. 조용하고, 왜 그런지 적힌다.
-    # 되돌리려면 config 의 TTS_PROVIDER 를 "edge" 로 두면 된다.
-    # ------------------------------------------------------------
-    if TTS_PROVIDER == "gemini" and TTS_API_KEY:
+    # 레다 하나만 쓴다. 못 만들면 다른 목소리로 내려가지 않는다 —
+    # 조용하고, 왜 그런지 적힌다.
+    if not TTS_API_KEY:
+        why = "Gemini 열쇠가 없습니다 (.gemini_key 또는 GEMINI_API_KEY)"
+        out = None
+    else:
         out = _tts_gemini(text)
         why = "gemini 가 소리를 못 만들었습니다 (할당량이거나 오류)"
-
-    elif TTS_PROVIDER == "edge":
-        out = _tts_edge(text)
-        why = "edge 가 소리를 못 만들었습니다"
-
-    else:
-        out = None
-        why = f"쓸 수 있는 목소리가 없습니다 (provider={TTS_PROVIDER})"
 
     if out is None:
         print(f"[목소리]: {why} — 이번 말은 조용히 넘어갑니다.")

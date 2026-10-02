@@ -141,7 +141,7 @@
             appendMessage('ai',
                 voice.on
                     ? '목소리 켬 — ' + voice.provider
-                      + (voice.pick ? ' (' + voice.pick.name + ')' : '')
+                      + (voice.name ? ' (' + voice.name + ')' : '')
                     : '목소리 끔');
 
             return true;

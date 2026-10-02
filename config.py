@@ -222,33 +222,24 @@ MAX_HISTORY_MESSAGES = 12
 # ============================================================
 # 목소리 (TTS)
 #
-# 어디서 소리를 만들지 고른다.
+# **Gemini 의 레다(Leda, Youthful) 하나만 쓴다.** (2026-10-02)
 #
-#   "browser" — 브라우저에 들어 있는 목소리. 키도 돈도 필요 없고
-#               인터넷 없이도 되지만, 윈도우 기본 한국어 목소리라
-#               감정이 실리지 않는다.
+# 사용자가 목소리 후보(다이아 관련 파일\다이아_목소리후보\
+# Gemini_Leda_(Youthful).wav)를 듣고 골랐다. 그 견본은 _voice_try.py 가
+# 아래 TTS_STYLE 로 만든 것이라, 말투 지시도 그대로 둔다.
 #
-#   "edge"    — 마이크로소프트 Edge 의 읽어주기 목소리. pip install edge-tts.
-#               키도 돈도 필요 없고 브라우저 것보다 훨씬 자연스럽다.
-#               다만 공식 API 는 아니다 — 커뮤니티가 Edge 의 통신을 뜯어
-#               만든 것이라 약관상 회색지대다. 개인 시험용이라는 전제.
-#               한국어 여성은 SunHi 하나뿐이다(InJoon·Hyunsu 는 남성).
+# 예전에 있던 브라우저 목소리와 Edge(선희)는 지웠다. 레다를 못 만들면
+# 다른 목소리로 내려가지 않고 그 말은 조용히 넘어간다 — 콘솔에 왜
+# 그런지 남는다.
 #
-#   "gemini"  — Google Gemini TTS. '아케르나르(Achernar)'가 여기 목소리다.
-#               한국어 억양이 자연스럽고 말투 지시까지 먹는다.
-#               다만 API 키가 있어야 하고, 말할 때마다 할당량이 나간다.
-#               키는 이 파일이 아니라 옆에 `.gemini_key` 로 둔다.
-#               **열쇠가 있으면 이쪽이 저절로 쓰인다.**
-#
-# naturalreaders.com 은 개발자용 API 가 공개돼 있지 않다.
-# 유료 계정으로 웹에서 듣는 서비스라 이 프로그램에서는 부를 수 없다.
-# 그쪽 목소리를 꼭 써야 한다면 소리를 파일로 받아 두는 수밖에 없다.
+# 열쇠는 이 파일이 아니라 옆의 `.gemini_key`(올린 데서는 환경변수
+# GEMINI_API_KEY)로 둔다. 무료 등급은 하루에 부를 수 있는 횟수가 적다.
+# 같은 말은 _voice_cache 에 떠 두어 두 번째부터는 부르지 않는다.
 # ============================================================
 
 TTS_ENABLED = True
 
-# 아케르나르. gemini 를 쓸 때만 의미가 있다.
-TTS_VOICE = "Achernar"
+TTS_VOICE = "Leda"
 
 
 def _gemini_key():
@@ -276,42 +267,7 @@ def _gemini_key():
 
 TTS_API_KEY = _gemini_key()
 
-# 어느 것을 쓸지 못 박는 칸.
-#
-# 비워 두면 열쇠가 있을 때 gemini, 없으면 edge 로 저절로 고른다.
-# 여기에 이름을 적으면 그 값이 이긴다.
-#
-# **지금은 "edge" 로 박아 둔다.** gemini 무료 등급이 하루 10번이라
-# 만들면서 쓰기에는 턱없이 모자라다. 열쇠는 그대로 두었으니,
-# 유료로 올리거나 정해진 말을 미리 떠 둔 뒤에 "" 나 "gemini" 로
-# 바꾸면 그때부터 아케르나르가 나온다.
-TTS_PROVIDER_FORCE = os.environ.get("TTS_PROVIDER", "").strip() or "edge"
-
-# 어디서 소리를 만들지.
-#
-# 예전에는 여기에 "edge" 가 박혀 있었다. 그래서 들어 보고 골라 둔
-# Achernar 가 TTS_VOICE 에 적히기만 하고 **한 번도 불리지 않았다** —
-# 그 값은 provider 가 "gemini" 일 때만 쓰이기 때문이다. 열쇠는
-# .gemini_key 에 있었는데 그 파일을 읽는 코드가 없었다.
-TTS_PROVIDER = (TTS_PROVIDER_FORCE
-                or ("gemini" if TTS_API_KEY else "edge"))
-
 TTS_MODEL = "gemini-2.5-flash-preview-tts"
-
-# edge 를 쓸 때의 목소리와 조절값.
-#
-# rate 와 pitch 는 문자열이다. "+10%" "-5%" "+20Hz" 처럼 적는다.
-#
-# rate 는 말이 얼마나 빠른가다. 처음에 -4% 로 두었더니 느렸다.
-# 사람이 편하게 말하는 속도는 기본보다 조금 빠른 쪽이다.
-# 더 빠르게 하려면 +25%, 느리게 하려면 0% 나 -10% 로.
-TTS_EDGE_VOICE = "ko-KR-SunHiNeural"
-TTS_EDGE_RATE = "+28%"
-TTS_EDGE_PITCH = "-2Hz"
 
 # 말투 지시. gemini 는 이 문장대로 읽어 준다.
 TTS_STYLE = "부드럽고 조금 낮은 목소리로, 친한 사람에게 말하듯 자연스럽게"
-
-# 브라우저 목소리를 쓸 때의 조절값
-TTS_RATE = 1.0
-TTS_PITCH = 1.05
