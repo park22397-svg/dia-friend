@@ -270,4 +270,12 @@ TTS_API_KEY = _gemini_key()
 TTS_MODEL = "gemini-2.5-flash-preview-tts"
 
 # 말투 지시. gemini 는 이 문장대로 읽어 준다.
-TTS_STYLE = "부드럽고 조금 낮은 목소리로, 친한 사람에게 말하듯 자연스럽게"
+#
+# 사용자가 고른 견본 tts_leda_soft.mp3 (레다, 부드럽게)에 맞췄다.
+# 견본은 음 높이 중앙값 189Hz 로 기본(217Hz)보다 낮고 차분하다.
+# 이 문장이 191Hz 로 가장 가까웠다(2026-10-02).
+#
+# "softly"·"속삭이듯" 을 쓰면 **속삭임**(성대가 안 울림)이 나온다.
+# 그래서 "not whispering" 을 꼭 붙인다.
+TTS_STYLE = ("In a soft, warm, calm speaking voice (not whispering), "
+             "slightly low pitch")
