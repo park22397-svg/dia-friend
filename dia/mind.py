@@ -444,6 +444,13 @@ def feel_absence(gap_sec, rel=None):
         print(f"[마음]: {gap_sec / 3600:.1f}시간 만 — {HEART.words(after)}")
 
 
+def heart_view(rel=None):
+    """몸이 쓸 지금 마음. 화면을 처음 띄울 때 묻는다."""
+    rel = rel or load_relationship() or {}
+    state = HEART.load(rel.get("affinity", 0), bool(rel.get("lover")))
+    return {"now": HEART.to_view(state), "face": HEART.face(state)}
+
+
 def feel_event(deltas, rel=None):
     """시스템이 알려 준 일로 마음을 살짝 민다."""
     if not deltas:

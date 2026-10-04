@@ -43,6 +43,8 @@
         let currentExpression = 'neutral';
 
         let isExpressing = false;
+        // 지금 얼굴이 마음이 남긴 쉬는 얼굴인가(dia/heart.js)
+        let faceResting = false;
 
 
         // ============================================================
@@ -158,6 +160,7 @@
                     applyUiConf();
                     setMood(currentExpression);
                     refreshRelationship();
+                    loadHeart();
                 });
 
                 // 아바타를 다 불러왔으니 잠 표시(💤)도 같이 켠다.

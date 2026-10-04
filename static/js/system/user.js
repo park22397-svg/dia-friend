@@ -382,7 +382,7 @@
             kissWaiting = false;
 
             // 말하는 중이면 그 얼굴이 이긴다. 여기서 지우면 안 된다.
-            if (!isSpeaking() && !isWaitingForAI) applyExpression('neutral');
+            if (!isSpeaking() && !isWaitingForAI) settleFace();
         }
 
 

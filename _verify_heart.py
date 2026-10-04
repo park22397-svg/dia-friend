@@ -8,6 +8,7 @@
 #   5. 놀이가 끝나면 정해 둔 대사 대신 "event" 가 실려 오고,
 #      /api/dia/react 가 다이아의 말로 답한다
 #   6. 화면이 보낸 사건 글(note)은 믿지 않는다
+#   7. 몸이 쓸 쉬는 얼굴(face·반감기)이 답과 /api/dia/heart 로 온다
 #
 # 모델은 가짜로 바꿔 끼운다(모델 서버 없이 돈다). 진짜 계정·기억을 안
 # 건드리도록 임시 자리에서 돈다.
@@ -127,6 +128,14 @@ with app.test_client() as c:
        last[-1]["content"][:30])
     ok(last.index(heart_note[0]) == len(last) - 2, "마음은 말투 지시 바로 앞이다")
 
+    # 몸 — 쉴 때 지을 얼굴과 그 얼굴이 가라앉는 빠르기가 같이 온다
+    f = (r.get("feel") or {}).get("face") or {}
+    ok(f.get("expression") == "fun" and f.get("half_min") == 240,
+       "답에 쉬는 얼굴(애정→fun)과 반감기가 온다", f)
+    h = c.get("/api/dia/heart").get_json()
+    ok(h.get("ok") and (h.get("feel") or {}).get("face", {}).get("expression"),
+       "처음 띄울 때 지금 마음을 물을 수 있다", h)
+
 print()
 print("놀이 사건")
 
@@ -160,6 +169,7 @@ print()
 print("로그인 없이")
 with app.test_client() as c:
     ok(c.post("/api/dia/react", json={}).status_code == 401, "반응도 로그인 없이 못 쓴다")
+    ok(c.get("/api/dia/heart").status_code == 401, "마음도 로그인 없이 못 본다")
 
 print()
 shutil.rmtree(SANDBOX, ignore_errors=True)

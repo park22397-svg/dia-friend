@@ -113,7 +113,7 @@
                 const duration = (expression === 'surprised') ? 1000 : 3000;
                 
                 window.expressionChangeTimer = setTimeout(() => {
-                    applyExpression('neutral');
+                    settleFace();
                 }, duration);
             }
 

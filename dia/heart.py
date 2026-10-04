@@ -258,7 +258,9 @@ def face(state):
     if not top:
         return None
     name, v = top[0]
-    return {"emotion": name, "level": round(v, 2), "expression": _FACE[name]}
+    # 반감기도 같이 준다 — 화면이 서버를 다시 부르지 않고 얼굴을 가라앉힌다.
+    return {"emotion": name, "level": round(v, 2), "expression": _FACE[name],
+            "half_min": _HALF[name]}
 
 
 def to_view(state):

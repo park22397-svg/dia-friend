@@ -190,7 +190,9 @@
                 // 다만 얼굴이 곧 그 동작인 몸짓은 예외다. 쑥스러워하기와
                 // 얼굴 가리기는 놀란 얼굴과 한 몸이라, 웃으면서 하면
                 // 무엇을 하는 건지 알 수 없게 된다.
-                const bare = !currentExpression || currentExpression === 'neutral';
+                // 마음이 남긴 쉬는 얼굴도 빈 얼굴로 친다 — 옅게 지은 것이라 덮어도 된다.
+                const bare = !currentExpression || currentExpression === 'neutral'
+                    || faceResting;
 
                 if (bare || m.expression_force) {
 
@@ -201,6 +203,7 @@
                     // 되돌릴 곳은 평온이 아니라 '동작 전에 짓고 있던 얼굴'
                     // 이다 — 말하는 중이면 그 말의 얼굴로 돌아가야 한다.
                     const before = currentExpression || 'neutral';
+                    const beforeRest = faceResting;
 
                     applyExpression(m.expression);
 
@@ -213,7 +216,7 @@
                             motionFaceTimer = null;
                             // 그 사이 다른 얼굴로 바뀌었으면 건드리지 않는다
                             if (currentExpression === m.expression) {
-                                applyExpression(before);
+                                if (beforeRest) settleFace(); else applyExpression(before);
                             }
                         }, ms);
                     }

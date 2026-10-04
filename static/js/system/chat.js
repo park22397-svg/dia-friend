@@ -414,6 +414,9 @@
                         ? (stretches ? 'joy' : 'neutral')
                         : (data.expression || 'neutral');
 
+                    // 다이아의 마음. 말을 마친 뒤 얼굴이 이것을 따라간다.
+                    takeHeart(data.feel);
+
                     if (typeof data.mood === 'number') {
                         myMood.level = data.mood;
                     }

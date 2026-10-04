@@ -555,6 +555,17 @@ def chat_api():
 # 다시 짓는다(events.rebuild).
 # ============================================================
 
+@app.route("/api/dia/heart", methods=["GET"])
+def dia_heart_api():
+    """다이아의 지금 마음 — 몸(얼굴)이 쉬는 동안 지을 표정을 정하는 데 쓴다."""
+    from dia import mind as MIND
+    try:
+        return jsonify({"ok": True, "feel": MIND.heart_view()})
+    except Exception as e:
+        print(f"[마음 읽기 오류]: {e}")
+        return jsonify({"ok": False, "feel": None})
+
+
 @app.route("/api/dia/react", methods=["POST"])
 def dia_react_api():
     from dia import mind as MIND

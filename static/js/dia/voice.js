@@ -307,8 +307,10 @@
             // 말이 시작됐으니 입을 립싱크에 넘긴다.
             // 표정을 다시 걸면 눈·눈썹만 남고 입이 비워진다.
             const wasFace = currentExpression;
+            const wasRest = faceResting;
             setTimeout(() => {
-                if (wasFace && isSpeaking()) applyExpression(wasFace);
+                if (!wasFace || !isSpeaking()) return;
+                if (wasRest) settleFace(); else applyExpression(wasFace);
             }, 0);
 
             lipSyncTimer = setInterval(() => {
@@ -367,7 +369,7 @@
                     const L = (ENTITY && ENTITY.behavior
                         && ENTITY.behavior.lipsync) || {};
 
-                    let baseAmount = (currentExpression === 'neutral')
+                    let baseAmount = (currentExpression === 'neutral' || faceResting)
                         ? (L.amount || 0.9)
                         : (L.amount_expressing || 0.6);
 
@@ -503,7 +505,7 @@
             bubbleHideTimer = setTimeout(() => {
                 speechBubble.style.display = 'none';
                 stopLipSync();
-                applyExpression('neutral');
+                settleFace();
             }, hold);
         }
 

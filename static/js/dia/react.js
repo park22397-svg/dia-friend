@@ -47,6 +47,7 @@
                     body: JSON.stringify({ event: ev }),
                 }).then(r => r.json());
 
+                if (d && d.feel) takeHeart(d.feel);
                 if (d && d.ok && d.reply) {
                     faceUser();
                     showReply(d.reply, d.expression || 'neutral', d.cues || []);

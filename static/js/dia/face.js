@@ -151,8 +151,15 @@
             return !!lipSyncTimer;
         }
 
-        function applyExpression(expression) {
+        // amount 는 얼마나 짓는가(0~1). 보통은 다 짓는다.
+        // 쉬는 얼굴(dia/heart.js)만 옅게 짓는다 — 그때는 표정 중으로 치지 않아
+        // 깜빡임이 이어진다.
+        function applyExpression(expression, amount) {
             if (!currentVRM || !currentVRM.blendShapeProxy) return;
+
+            const k = (typeof amount === 'number') ? Math.max(0, Math.min(1, amount)) : 1;
+            const resting = k < 1;
+            faceResting = false;
 
             // 부정적인 표현이 사라지는 단계면 여기서 갈아 끼운다.
             expression = swapNegative('expressions', expression);
@@ -172,7 +179,7 @@
 
                 if (!proxy) return;
                 currentExpression = expression;
-                isExpressing = expression !== 'neutral';
+                isExpressing = expression !== 'neutral' && !resting;
 
                 // 지울 이름은 개체가 알려준 목록을 쓴다.
                 const clearNames = ENTITY_SHAPES.length
@@ -220,13 +227,13 @@
                     if (parts) {
                         // 입을 뺀 채로 눈과 눈썹만
                         parts.forEach(n => {
-                            setMorph(n, shapes[name]);
+                            setMorph(n, shapes[name] * k);
                             speakMorphs.add(n);
                         });
                         return;
                     }
 
-                    try { proxy.setValue(name, shapes[name]); } catch (e) {}
+                    try { proxy.setValue(name, shapes[name] * k); } catch (e) {}
                 });
 
                 // 부위별 모프도 개체가 정한 대로 얹는다
@@ -239,8 +246,8 @@
                     // 평소에는 그룹(ALL_Fun)의 눈 몫 위에 이 조각이 더해져
                     // 보이므로, 말할 때도 같은 합이어야 얼굴이 안 바뀐다.
                     const base = speakMorphs.has(n)
-                        ? (shapeOfPart(n, shapes, toParts) || 0) : 0;
-                    setMorph(n, base + morphs[n]);
+                        ? (shapeOfPart(n, shapes, toParts) || 0) * k : 0;
+                    setMorph(n, base + morphs[n] * k);
                 });
 
                 // 단계에 붙어 있는 얼굴은 표정과 상관없이 늘 걸린다.
@@ -259,7 +266,7 @@
                 const usesEyes = Object.keys(shapes)
                     .some(n => String(n).indexOf('blink') === 0);
 
-                if (expression !== 'neutral' && !usesEyes) {
+                if (expression !== 'neutral' && !usesEyes && !resting) {
                     isBlinking = false;
                     blinkProgress = 0;
                     blinkTimer = 0;
@@ -459,7 +466,7 @@
 
                 const ms = e.hold_ms || 3000;
                 window.expressionChangeTimer = setTimeout(() => {
-                    applyExpression('neutral');
+                    settleFace();
                 }, ms);
 
                 return e.key;
