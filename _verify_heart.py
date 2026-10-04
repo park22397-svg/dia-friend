@@ -132,9 +132,23 @@ with app.test_client() as c:
     f = (r.get("feel") or {}).get("face") or {}
     ok(f.get("expression") == "fun" and f.get("half_min") == 240,
        "답에 쉬는 얼굴(애정→fun)과 반감기가 온다", f)
+    b = (r.get("feel") or {}).get("body") or {}
+    ok(b.get("head_z", 0) > 0 and b.get("pace", 1) > 1,
+       "애정·설렘이면 고개를 갸웃하고 숨이 빨라진다", b)
     h = c.get("/api/dia/heart").get_json()
     ok(h.get("ok") and (h.get("feel") or {}).get("face", {}).get("expression"),
        "처음 띄울 때 지금 마음을 물을 수 있다", h)
+
+print()
+print("몸 — 마음이 지우는 자세")
+sad = H.body({"feel": {"서운함": 0.8}})
+ok(sad["head_x"] < 0 and sad["away"] > 0, "서운하면 고개를 숙이고 눈을 피한다", sad)
+ok(H.body({"feel": {"기쁨": 0.05}}) is None, "마음이 옅으면 자세도 없다")
+mix = H.body({"feel": {"서운함": 0.6, "애정": 0.6}})
+ok(mix["head_x"] < 0 and mix["head_z"] > 0, "서운하면서 애틋하면 숙인 채 갸웃한다", mix)
+weak = H.body({"feel": {"슬픔": 0.3}})
+ok(weak["head_x"] > sad["head_x"] * 0.6 and weak["head_x"] < 0, "약하면 덜 숙인다", weak)
+ok(set(H.POSE) == set(H.NAMES), "감정마다 자세가 있다")
 
 print()
 print("놀이 사건")

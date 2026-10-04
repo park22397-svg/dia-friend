@@ -38,6 +38,26 @@ EMOTIONS = [
     ("외로움",  180, "sorrow"),
 ]
 
+# 몸이 지을 자세. 얼굴처럼 몸의 말이다 — 다이아에게 시키는 규칙이 아니다.
+#
+#   head_x  고개 앞뒤(도). 음수가 숙임, 양수가 젖힘(실측 — 모델이 -Z 를 본다)
+#   head_z  고개 갸웃(도)
+#   away    시선을 피하는 정도(도). 말할 때는 반만 피한다
+#   bob     숨·흔들림 크기(1 = 평소)
+#   pace    숨·흔들림 빠르기(1 = 평소)
+#   jitter  안절부절 잔떨림(0~1)
+POSE = {
+    "기쁨":     {"head_x":  2, "head_z": 0, "away":  0, "bob": 1.6, "pace": 1.4, "jitter": 0},
+    "설렘":     {"head_x":  1, "head_z": 4, "away":  0, "bob": 1.8, "pace": 1.7, "jitter": 0},
+    "애정":     {"head_x":  0, "head_z": 6, "away":  0, "bob": 1.0, "pace": 0.8, "jitter": 0},
+    "슬픔":     {"head_x": -9, "head_z": 0, "away":  0, "bob": 0.5, "pace": 0.6, "jitter": 0},
+    "서운함":   {"head_x": -6, "head_z": 0, "away":  8, "bob": 0.6, "pace": 0.7, "jitter": 0},
+    "짜증":     {"head_x": -2, "head_z": 0, "away": 12, "bob": 0.3, "pace": 1.0, "jitter": 0},
+    "불안":     {"head_x": -3, "head_z": 0, "away":  3, "bob": 0.8, "pace": 1.3, "jitter": 1},
+    "부끄러움": {"head_x": -8, "head_z": 5, "away": 10, "bob": 0.8, "pace": 1.1, "jitter": 0},
+    "외로움":   {"head_x": -7, "head_z": -3, "away": 0, "bob": 0.6, "pace": 0.6, "jitter": 0},
+}
+
 NAMES = [e[0] for e in EMOTIONS]
 _HALF = {e[0]: e[1] for e in EMOTIONS}
 _FACE = {e[0]: e[2] for e in EMOTIONS}
@@ -261,6 +281,27 @@ def face(state):
     # 반감기도 같이 준다 — 화면이 서버를 다시 부르지 않고 얼굴을 가라앉힌다.
     return {"emotion": name, "level": round(v, 2), "expression": _FACE[name],
             "half_min": _HALF[name]}
+
+
+def body(state):
+    """마음이 몸에 지우는 자세. 느끼는 감정들을 세기만큼 섞는다. 없으면 None.
+
+    가장 센 것 하나만 쓰지 않는다 — 서운하면서 애틋하면 고개를 숙인 채
+    갸웃한다. half_min 은 세기로 무게를 둔 반감기다(화면이 가라앉힐 때 쓴다).
+    """
+    top = strongest(state, 3)
+    if not top:
+        return None
+    total = sum(v for _, v in top)
+    strength = min(1.0, top[0][1])
+    out = {}
+    for key in ("head_x", "head_z", "away", "jitter"):
+        out[key] = round(sum(v * POSE[n][key] for n, v in top) / total * strength, 2)
+    for key in ("bob", "pace"):
+        m = sum(v * POSE[n][key] for n, v in top) / total
+        out[key] = round(1 + (m - 1) * strength, 2)
+    out["half_min"] = round(sum(v * _HALF[n] for n, v in top) / total)
+    return out
 
 
 def to_view(state):

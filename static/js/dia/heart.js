@@ -14,6 +14,7 @@
 
         const diaHeart = {
             face: null,     // {emotion, level, expression, half_min}
+            body: null,     // {head_x, head_z, away, bob, pace, jitter, half_min}
             at: 0,          // 받은 시각(ms)
         };
 
@@ -28,7 +29,68 @@
         function takeHeart(feel) {
             if (!feel || typeof feel !== 'object') return;
             diaHeart.face = feel.face || null;
+            diaHeart.body = feel.body || null;
             diaHeart.at = Date.now();
+        }
+
+
+        // ============================================================
+        // 마음이 몸에 지우는 자세 (3단계 둘째 조각, 2026-10-04)
+        //
+        // 서운하면 고개가 내려가고 눈을 피한다. 설레면 숨이 빨라지고 몸이
+        // 들썩인다. 어떤 자세인지는 서버(dia/heart.py 의 POSE)가 마음을 섞어
+        // 보내고, 여기서는 그것을 천천히 따라가며 고개에 얹는다.
+        // 마음이 가라앉으면 자세도 같이 풀린다.
+        // ============================================================
+
+        const heartPose = {
+            headX: 0, headZ: 0, away: 0,    // 라디안, 지금 지은 값
+            bob: 1, pace: 1, jitter: 0,
+            phase: 0,                       // 숨 흔들림 위상
+        };
+
+        // 자세가 바뀌는 빠르기. 얼굴보다 느리게 — 몸은 천천히 기운다.
+        const HEART_POSE_FOLLOW = 1.2;
+
+        function heartPoseWant() {
+            const b = diaHeart.body;
+            if (!b) return null;
+            const mins = (Date.now() - diaHeart.at) / 60000;
+            const k = Math.pow(0.5, mins / (b.half_min || 60));
+            if (k < 0.05) return null;
+            const D = Math.PI / 180;
+            // 말하는 동안은 상대를 본다 — 피하던 눈을 반쯤 돌려 준다
+            const awayK = isSpeaking() ? 0.5 : 1;
+            return {
+                headX: (b.head_x || 0) * D * k,
+                headZ: (b.head_z || 0) * D * k,
+                away: (b.away || 0) * D * k * awayK,
+                bob: 1 + ((b.bob || 1) - 1) * k,
+                pace: 1 + ((b.pace || 1) - 1) * k,
+                jitter: (b.jitter || 0) * k,
+            };
+        }
+
+        // 매 프레임. 고개에 더할 값을 돌려준다.
+        function updateHeartPose(dt) {
+            const w = heartPoseWant() || { headX: 0, headZ: 0, away: 0, bob: 1, pace: 1, jitter: 0 };
+            const k = Math.min(1, dt * HEART_POSE_FOLLOW);
+            ['headX', 'headZ', 'away', 'bob', 'pace', 'jitter'].forEach(n => {
+                heartPose[n] += (w[n] - heartPose[n]) * k;
+            });
+
+            // 빠르기가 바뀌어도 흔들림이 튀지 않게 위상을 쌓는다
+            heartPose.phase += dt * 2.0 * heartPose.pace;
+
+            const t = heartPose.phase;
+            const jit = heartPose.jitter
+                ? (Math.sin(t * 7.3) + Math.sin(t * 11.9)) * 0.006 * heartPose.jitter : 0;
+
+            return {
+                x: heartPose.headX + Math.sin(t) * 0.02 * heartPose.bob + jit,
+                y: heartPose.away + jit * 0.5,
+                z: heartPose.headZ,
+            };
         }
 
         // 지금 쉬는 얼굴. 없으면 null.

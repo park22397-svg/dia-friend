@@ -448,7 +448,8 @@ def heart_view(rel=None):
     """몸이 쓸 지금 마음. 화면을 처음 띄울 때 묻는다."""
     rel = rel or load_relationship() or {}
     state = HEART.load(rel.get("affinity", 0), bool(rel.get("lover")))
-    return {"now": HEART.to_view(state), "face": HEART.face(state)}
+    return {"now": HEART.to_view(state), "face": HEART.face(state),
+            "body": HEART.body(state)}
 
 
 def feel_event(deltas, rel=None):
@@ -577,7 +578,8 @@ def think(stage, transition=None, user_name=None, notes=None,
             print(f"[답 기억 저장 오류]: {e}")
 
     got["ok"] = True
-    got["feel"] = {"now": HEART.to_view(state), "face": HEART.face(state)}
+    got["feel"] = {"now": HEART.to_view(state), "face": HEART.face(state),
+            "body": HEART.body(state)}
     return got
 
 

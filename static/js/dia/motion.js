@@ -50,6 +50,8 @@
         // 동작이 정한 머리 각도. 숨쉬기 흔들림은 이 값 '위에' 얹는다.
         // 덮어쓰면 끄덕임 같은 머리 동작이 화면에서 지워진다.
         let poseHeadX = 0;
+        // 고개 갸웃(z)도 같은 식으로 넘긴다. 마음의 자세가 그 위에 더해진다.
+        let poseHeadZ = 0;
 
         function cacheBones() {
             boneNodes = {};
@@ -230,6 +232,7 @@
             if (!player.motion) {
                 const b = basePose()['head'];
                 poseHeadX = b ? b[0] * DEG : 0;
+                poseHeadZ = b ? b[2] * DEG : 0;
                 return;
             }
 
@@ -299,6 +302,7 @@
             });
 
             poseHeadX = pose['head'] ? pose['head'][0] * DEG : 0;
+            poseHeadZ = pose['head'] ? pose['head'][2] * DEG : 0;
 
             // 몸 전체가 도는 동작(등 돌리기)은 뼈로 못 만든다.
             // 척추를 150도 비트는 사람은 없다. 그래서 여기서 통째로 돌린다.

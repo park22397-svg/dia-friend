@@ -673,19 +673,19 @@
 
                         if (head) {
 
+                            // 숨 흔들림과 마음이 지운 자세(dia/heart.js).
+                            // 서운하면 숙이고 눈을 피하고, 설레면 빨리 들썩인다.
+                            const hp = updateHeartPose(deltaTime);
+
                             head.rotation.x =
-                                poseHeadX +
-                                Math.sin(
-                                    clock.getElapsedTime() *
-                                    2.0
-                                ) *
-                                0.02
+                                poseHeadX + hp.x
                                 // 카메라에 보이는 얼굴 쪽으로 고개를 든다
                                 + gaze.pitch;
 
                             // 좌우는 여기서만 건드린다.
                             // 몸이 도는 것(roam.yaw)과 별개로 고개만 돌린다.
-                            head.rotation.y = gaze.yaw;
+                            head.rotation.y = gaze.yaw + hp.y;
+                            head.rotation.z = poseHeadZ + hp.z;
                         }
 
                     } catch (e) {}
