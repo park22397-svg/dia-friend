@@ -149,6 +149,14 @@ ok(mix["head_x"] < 0 and mix["head_z"] > 0, "서운하면서 애틋하면 숙인
 weak = H.body({"feel": {"슬픔": 0.3}})
 ok(weak["head_x"] > sad["head_x"] * 0.6 and weak["head_x"] < 0, "약하면 덜 숙인다", weak)
 ok(set(H.POSE) == set(H.NAMES), "감정마다 자세가 있다")
+ok(sad["voice"] < 1, "서운하면 말이 느려진다", sad)
+ok(H.body({"feel": {"설렘": 0.8}})["voice"] > 1, "설레면 말이 빨라진다")
+ok(H.body({"feel": {"짜증": 0.8}})["gesture"] == "cross", "몹시 짜증 나면 팔짱을 낀다")
+ok(H.body({"feel": {"짜증": 0.4}})["gesture"] is None, "옅은 마음은 몸짓까지는 안 간다")
+from avatar import AVATAR
+_keys = {m["key"] for m in AVATAR.to_dict()["motions"]}
+ok(all(p["gesture"] in _keys for p in H.POSE.values() if p["gesture"]),
+   "자세표의 몸짓은 다 있는 동작이다", [p["gesture"] for p in H.POSE.values()])
 
 print()
 print("놀이 사건")

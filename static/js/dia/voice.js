@@ -160,11 +160,22 @@
                         const a = new Audio(src);
                         voice.audio = a;
 
+                        // 마음이 목소리에도 묻는다(dia/heart.js). 서운하면 조금
+                        // 느리고 낮게, 설레면 조금 빠르고 높게. 소리를 다시
+                        // 만들지 않고 재생 속도로만 바꾼다 — 떠 둔 소리를 그대로 쓴다.
+                        const tempo = heartVoiceRate();
+                        if (tempo !== 1) {
+                            a.preservesPitch = false;
+                            a.webkitPreservesPitch = false;
+                            a.playbackRate = tempo;
+                        }
+
                         // 소리 길이를 알아야 입을 맞출 수 있다.
                         // 다 읽히기를 기다렸다가 튼다 — 그래야 길이가 나온다.
                         const ms = await new Promise(res => {
                             a.onloadedmetadata = () => {
-                                res(isFinite(a.duration) ? a.duration * 1000 : 0);
+                                // 빨리 틀면 그만큼 짧게 끝난다. 입도 그 길이에 맞춘다.
+                                res(isFinite(a.duration) ? a.duration * 1000 / tempo : 0);
                             };
                             a.onerror = () => res(0);
                             setTimeout(() => res(0), 1500);

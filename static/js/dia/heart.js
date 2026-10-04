@@ -93,6 +93,59 @@
             };
         }
 
+        // 지금 마음이 정하는 말 빠르기(1 = 평소)
+        function heartVoiceRate() {
+            const b = diaHeart.body;
+            if (!b || !b.voice) return 1;
+            const mins = (Date.now() - diaHeart.at) / 60000;
+            const k = Math.pow(0.5, mins / (b.half_min || 60));
+            const r = 1 + (b.voice - 1) * k;
+            // 너무 조금 다르면 그냥 둔다(높낮이가 미세하게 어긋나기만 한다)
+            if (Math.abs(r - 1) < 0.01) return 1;
+            return Math.max(0.88, Math.min(1.12, r));
+        }
+
+
+        // ============================================================
+        // 마음이 셀 때 혼자 하는 몸짓 (3단계 셋째 조각, 2026-10-05)
+        //
+        // 화가 나 있으면 가만히 서 있다가 팔짱을 낀다. 부끄러우면 혼자
+        // 쑥스러워한다. 무엇을 할지는 서버(POSE 의 gesture)가 가장 센 마음이
+        // 또렷할 때만 보내고, 여기서는 '언제' 만 정한다 — 드물게, 틈을 두고,
+        // 말하거나 자거나 걷는 중에는 안 한다. 같은 몸짓을 되풀이하면 기계가
+        // 되므로 한 번 하고 나면 한참 쉰다.
+        // ============================================================
+
+        const heartGesture = {
+            next: 30 + Math.random() * 30,   // 다음에 해 볼 때까지(초)
+        };
+
+        function updateHeartGesture(dt) {
+            heartGesture.next -= dt;
+            if (heartGesture.next > 0) return;
+
+            // 다음 기회는 아무 일이 없어도 다시 잡는다
+            heartGesture.next = 25 + Math.random() * 35;
+
+            const b = diaHeart.body;
+            const g = b && b.gesture;
+            if (!g) return;
+
+            // 받은 지 오래면 그 마음은 이미 가라앉았다
+            const mins = (Date.now() - diaHeart.at) / 60000;
+            if (mins > (b.half_min || 60) * 0.5) return;
+
+            if (isSleeping || isSpeaking() || isWaitingForAI) return;
+            if (typeof roam === 'undefined' || roam.state !== 'idle') return;
+            if (Math.random() < 0.4) return;     // 늘 하지는 않는다
+
+            roam.state = 'gesture';
+            playMotion(g);
+
+            // 한 번 했으면 한참 쉰다
+            heartGesture.next = 60 + Math.random() * 60;
+        }
+
         // 지금 쉬는 얼굴. 없으면 null.
         function restingFace() {
             const f = diaHeart.face;

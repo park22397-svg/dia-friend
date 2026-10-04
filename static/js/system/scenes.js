@@ -586,6 +586,7 @@
                 // 개체가 내려준 동작을 재생하고 위치를 갱신한다
                 updateMotion(deltaTime);
                 updateRoam(deltaTime);
+                updateHeartGesture(deltaTime);
                 updateBubblePos(deltaTime);
                 updateZzzPos();
 

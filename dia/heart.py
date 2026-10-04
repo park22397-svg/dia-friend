@@ -46,16 +46,18 @@ EMOTIONS = [
 #   bob     숨·흔들림 크기(1 = 평소)
 #   pace    숨·흔들림 빠르기(1 = 평소)
 #   jitter  안절부절 잔떨림(0~1)
+#   voice   말 빠르기(1 = 평소). 재생 속도로 바꿔서 높낮이도 살짝 따라간다
+#   gesture 마음이 셀 때 혼자 가끔 하는 몸짓(avatar.py 의 동작 이름). 없으면 None
 POSE = {
-    "기쁨":     {"head_x":  2, "head_z": 0, "away":  0, "bob": 1.6, "pace": 1.4, "jitter": 0},
-    "설렘":     {"head_x":  1, "head_z": 4, "away":  0, "bob": 1.8, "pace": 1.7, "jitter": 0},
-    "애정":     {"head_x":  0, "head_z": 6, "away":  0, "bob": 1.0, "pace": 0.8, "jitter": 0},
-    "슬픔":     {"head_x": -9, "head_z": 0, "away":  0, "bob": 0.5, "pace": 0.6, "jitter": 0},
-    "서운함":   {"head_x": -6, "head_z": 0, "away":  8, "bob": 0.6, "pace": 0.7, "jitter": 0},
-    "짜증":     {"head_x": -2, "head_z": 0, "away": 12, "bob": 0.3, "pace": 1.0, "jitter": 0},
-    "불안":     {"head_x": -3, "head_z": 0, "away":  3, "bob": 0.8, "pace": 1.3, "jitter": 1},
-    "부끄러움": {"head_x": -8, "head_z": 5, "away": 10, "bob": 0.8, "pace": 1.1, "jitter": 0},
-    "외로움":   {"head_x": -7, "head_z": -3, "away": 0, "bob": 0.6, "pace": 0.6, "jitter": 0},
+    "기쁨":     {"head_x":  2, "head_z": 0, "away":  0, "bob": 1.6, "pace": 1.4, "jitter": 0, "voice": 1.05, "gesture": None},
+    "설렘":     {"head_x":  1, "head_z": 4, "away":  0, "bob": 1.8, "pace": 1.7, "jitter": 0, "voice": 1.07, "gesture": "pose_cheek"},
+    "애정":     {"head_x":  0, "head_z": 6, "away":  0, "bob": 1.0, "pace": 0.8, "jitter": 0, "voice": 0.98, "gesture": None},
+    "슬픔":     {"head_x": -9, "head_z": 0, "away":  0, "bob": 0.5, "pace": 0.6, "jitter": 0, "voice": 0.93, "gesture": None},
+    "서운함":   {"head_x": -6, "head_z": 0, "away":  8, "bob": 0.6, "pace": 0.7, "jitter": 0, "voice": 0.95, "gesture": None},
+    "짜증":     {"head_x": -2, "head_z": 0, "away": 12, "bob": 0.3, "pace": 1.0, "jitter": 0, "voice": 1.03, "gesture": "cross"},
+    "불안":     {"head_x": -3, "head_z": 0, "away":  3, "bob": 0.8, "pace": 1.3, "jitter": 1, "voice": 1.04, "gesture": None},
+    "부끄러움": {"head_x": -8, "head_z": 5, "away": 10, "bob": 0.8, "pace": 1.1, "jitter": 0, "voice": 0.97, "gesture": "shy"},
+    "외로움":   {"head_x": -7, "head_z": -3, "away": 0, "bob": 0.6, "pace": 0.6, "jitter": 0, "voice": 0.94, "gesture": None},
 }
 
 NAMES = [e[0] for e in EMOTIONS]
@@ -283,6 +285,10 @@ def face(state):
             "half_min": _HALF[name]}
 
 
+# 이만큼 세야 몸짓이 저절로 나온다
+GESTURE_FROM = 0.6
+
+
 def body(state):
     """마음이 몸에 지우는 자세. 느끼는 감정들을 세기만큼 섞는다. 없으면 None.
 
@@ -297,10 +303,13 @@ def body(state):
     out = {}
     for key in ("head_x", "head_z", "away", "jitter"):
         out[key] = round(sum(v * POSE[n][key] for n, v in top) / total * strength, 2)
-    for key in ("bob", "pace"):
+    for key in ("bob", "pace", "voice"):
         m = sum(v * POSE[n][key] for n, v in top) / total
         out[key] = round(1 + (m - 1) * strength, 2)
     out["half_min"] = round(sum(v * _HALF[n] for n, v in top) / total)
+    # 몸짓은 섞지 않는다 — 가장 센 마음이 또렷할 때만 나온다
+    name, v = top[0]
+    out["gesture"] = POSE[name]["gesture"] if v >= GESTURE_FROM else None
     return out
 
 
