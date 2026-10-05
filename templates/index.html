@@ -1240,6 +1240,10 @@
             transition: opacity 0.5s ease;
         }
 
+        /* 말풍선은 감춘다(2026-10-05 사용자 지시). 말은 채팅창과 목소리로 간다.
+           스크립트가 켜도(display:block) 이 줄이 이긴다. 되돌리려면 이 규칙만 지운다. */
+        #speech-bubble { display: none !important; }
+
         #speech-bubble::after {
             content: '';
             position: absolute;
