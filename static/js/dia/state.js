@@ -11,7 +11,9 @@
 
         let currentVRM = null;
 
-        let isSleeping = true;
+        // 다이아는 자지 않는다(2026-10-05 사용자 지시). 처음부터 깨어 있다.
+        // 깨우는 길(wakeUp)은 남아 있지만 이제 탈 일이 없다.
+        let isSleeping = false;
 
         let talkTimer = null;
         let sleepTimer = null;
@@ -97,7 +99,7 @@
                 vrm.scene.position.y = -0.2;
 
                 resetToAttentionPose();
-                setEyeState(true);
+                setEyeState(isSleeping);
 
                 // 배경은 모델과 상관없이 깔린다. 기다릴 것 없이 따로 부른다.
                 loadBackground();
@@ -162,9 +164,6 @@
                     refreshRelationship();
                     loadHeart();
                 });
-
-                // 아바타를 다 불러왔으니 잠 표시(💤)도 같이 켠다.
-                document.getElementById('zzz-indicator').style.display = 'block';
 
                 console.log("VRM 모델 로드 성공!");
             }).catch((error) => {
