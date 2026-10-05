@@ -178,11 +178,11 @@
             if (!m || !app) return;
             const w = app.renderer.width / app.renderer.resolution;
             const h = app.renderer.height / app.renderer.resolution;
-            // 상반신이 크게 보이게: 키의 1.6배로 키우고 머리를 화면 위쪽에 둔다
-            const s = (h * 1.6) / live2d.baseH;
+            // 전신이 다 보이게: 화면 높이의 94%(가로가 좁으면 가로에 맞춤), 위에 3% 여백
+            const s = Math.min((h * 0.94) / live2d.baseH, (w * 0.94) / live2d.baseW);
             m.scale.set(s);
             m.x = w / 2;
-            m.y = h * 0.04;
+            m.y = h * 0.03;
         }
 
         async function live2dStart() {
@@ -233,6 +233,7 @@
             live2d.app = app;
             live2d.model = model;
             live2d.baseH = model.height;
+            live2d.baseW = model.width;
             model.anchor.set(0.5, 0);
             app.stage.addChild(model);
 

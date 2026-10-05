@@ -8,8 +8,8 @@ Live2D 모델이 매 프레임 그 몸의 표정·입·눈·고개·시선을 �
 
 | 방법 | 어떻게 |
 |---|---|
-| 잠깐 보기 | 화면 주소 끝에 `?live2d=/static/live2d/망내/망내.model3.json` |
-| 늘 쓰기 | 서버 띄우기 전에 `$env:DIA_LIVE2D = "/static/live2d/망내/망내.model3.json"` |
+| 잠깐 보기 | 화면 주소 끝에 `?live2d=/static/live2d/mangnae/mangnae.model3.json` |
+| 늘 쓰기 | 서버 띄우기 전에 `$env:DIA_LIVE2D = "/static/live2d/mangnae/mangnae.model3.json"` |
 | 끄기 | 주소에 `?live2d=off`, 또는 환경변수를 비운다 → 늘 쓰던 3D 다이아 |
 
 모델 폴더(`.model3.json`·`.moc3`·텍스처·물리·모션)는 `static/live2d/<이름>/` 아래에 통째로 넣는다.
