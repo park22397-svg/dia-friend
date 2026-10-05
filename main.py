@@ -195,6 +195,12 @@ def _bind_user():
     if path.startswith("/api/"):
         return jsonify({"ok": False, "error": "로그인이 필요합니다."}), 401
 
+    # 주소 끝에 붙여 온 것(?live2d=... 등)은 로그인한 뒤에도 살린다.
+    # 예전에는 로그인하고 나면 그냥 / 로 가서 붙여 온 것이 사라졌다.
+    if path == "/" and request.query_string:
+        from urllib.parse import quote
+        return redirect("/login?next=" + quote(request.full_path, safe=""))
+
     return redirect("/login")
 
 
@@ -214,10 +220,18 @@ from system.games.routes import _again, _log_line  # noqa: E402
 
 app.register_blueprint(_games_bp)
 
+def _safe_next(nxt):
+    """로그인한 뒤 갈 곳. 이 서버 안의 주소만 받는다(//다른곳 은 안 된다)."""
+    nxt = str(nxt or "")
+    if nxt.startswith("/") and not nxt.startswith("//") and "\\" not in nxt:
+        return nxt
+    return "/"
+
+
 @app.route("/login")
 def login_page():
     if current_user():
-        return redirect("/")
+        return redirect(_safe_next(request.args.get("next")))
 
     return render_template(
         "login.html",
