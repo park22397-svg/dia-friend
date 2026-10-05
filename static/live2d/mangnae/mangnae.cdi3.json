@@ -62,6 +62,31 @@
 			"Name": "왼쪽 눈썹 좌우로"
 		},
 		{
+			"Id": "ParamFaceFun",
+			"GroupId": "",
+			"Name": "표정 미소(눈감음)"
+		},
+		{
+			"Id": "ParamFaceJoy",
+			"GroupId": "",
+			"Name": "표정 기쁨"
+		},
+		{
+			"Id": "ParamFaceSurprised",
+			"GroupId": "",
+			"Name": "표정 놀람"
+		},
+		{
+			"Id": "ParamFaceAngry",
+			"GroupId": "",
+			"Name": "표정 화남"
+		},
+		{
+			"Id": "ParamFaceSad",
+			"GroupId": "",
+			"Name": "표정 슬픔"
+		},
+		{
 			"Id": "ParamBrowRX",
 			"GroupId": "",
 			"Name": "오른쪽 눈썹 좌우로"
@@ -140,6 +165,10 @@
 	"ParameterGroups": [],
 	"Parts": [
 		{
+			"Id": "Part",
+			"Name": "mangnae_v5.psd(레이어를 찾을 수 없음)"
+		},
+		{
 			"Id": "hair_front",
 			"Name": "hair_front"
 		},
@@ -182,6 +211,18 @@
 		{
 			"Id": "hair_back",
 			"Name": "hair_back"
+		},
+		{
+			"Id": "expr",
+			"Name": "expr"
+		},
+		{
+			"Id": "eye_R2",
+			"Name": "eye_R"
+		},
+		{
+			"Id": "eye_L2",
+			"Name": "eye_L"
 		},
 		{
 			"Id": "eyeball_R",

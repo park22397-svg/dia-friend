@@ -41,12 +41,13 @@
 
         // 표정마다 Live2D 얼굴. 값은 '그 표정을 다 지었을 때' 이고 세기만큼 곱한다.
         // 모델에 없는 파라미터는 건너뛴다. (몸의 말이라 다이아에게 시키는 규칙이 아니다)
+        // ParamFace* 는 표정 그림을 통째로 얹는 것(망내: 표정 시트에서 뜬 눈 그림). 없는 모델은 눈썹·입만 움직인다.
         const LIVE2D_FACE = {
-            joy:       { ParamMouthForm: 1.0,  ParamEyeLSmile: 0.9, ParamEyeRSmile: 0.9, ParamCheek: 0.6, ParamBrowLY: 0.3, ParamBrowRY: 0.3 },
-            fun:       { ParamMouthForm: 0.7,  ParamEyeLSmile: 0.5, ParamEyeRSmile: 0.5, ParamCheek: 0.4 },
-            sorrow:    { ParamMouthForm: -0.7, ParamBrowLY: -0.3, ParamBrowRY: -0.3, ParamBrowLAngle: 0.8, ParamBrowRAngle: 0.8, ParamBrowLForm: -0.6, ParamBrowRForm: -0.6, eyeOpen: 0.75 },
-            angry:     { ParamMouthForm: -0.9, ParamBrowLY: -0.5, ParamBrowRY: -0.5, ParamBrowLAngle: -0.9, ParamBrowRAngle: -0.9, ParamBrowLForm: -1.0, ParamBrowRForm: -1.0, eyeOpen: 0.8 },
-            surprised: { ParamBrowLY: 1.0, ParamBrowRY: 1.0, ParamMouthOpenY: 0.5, eyeOpen: 1.25 },
+            joy:       { ParamFaceJoy: 1.0, ParamMouthForm: 1.0,  ParamEyeLSmile: 0.9, ParamEyeRSmile: 0.9, ParamCheek: 0.6, ParamBrowLY: 0.3, ParamBrowRY: 0.3 },
+            fun:       { ParamFaceFun: 1.0, ParamMouthForm: 0.7,  ParamEyeLSmile: 0.5, ParamEyeRSmile: 0.5, ParamCheek: 0.4 },
+            sorrow:    { ParamFaceSad: 1.0, ParamMouthForm: -0.7, ParamBrowLY: -0.3, ParamBrowRY: -0.3, ParamBrowLAngle: 0.8, ParamBrowRAngle: 0.8, ParamBrowLForm: -0.6, ParamBrowRForm: -0.6, eyeOpen: 0.75 },
+            angry:     { ParamFaceAngry: 1.0, ParamMouthForm: -0.9, ParamBrowLY: -0.5, ParamBrowRY: -0.5, ParamBrowLAngle: -0.9, ParamBrowRAngle: -0.9, ParamBrowLForm: -1.0, ParamBrowRForm: -1.0, eyeOpen: 0.8 },
+            surprised: { ParamFaceSurprised: 1.0, ParamBrowLY: 1.0, ParamBrowRY: 1.0, ParamMouthOpenY: 0.5, eyeOpen: 1.25 },
             eyes_closed: { eyeOpen: 0 },
         };
 

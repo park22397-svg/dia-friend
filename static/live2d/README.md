@@ -32,6 +32,7 @@ Live2D 모델이 매 프레임 그 몸의 표정·입·눈·고개·시선을 �
 | `ParamMouthForm` | 입꼬리 (−1 처짐 ~ 1 웃음) | 표정 + 모음(ㅣ·ㅔ 옆으로, ㅜ·ㅗ 오므림) |
 | `ParamMouthOpenY` | 입 벌림 | 립싱크 |
 | `ParamCheek` | 볼 홍조 | 기쁨·즐거움 |
+| `ParamFaceJoy` `ParamFaceFun` `ParamFaceSurprised` `ParamFaceAngry` `ParamFaceSad` | 표정 그림 통째로 얹기 (0~1) | 기쁨·즐거움·놀람·화남·슬픔 |
 
 없는 파라미터는 건너뛴다. 숨(`ParamBreath`)과 머리카락·옷 물리는 모델 쪽 설정이 그대로 돈다.
 표정마다 값을 얼마나 줄지는 `live2d.js` 의 `LIVE2D_FACE` 표에 있다.
