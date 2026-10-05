@@ -93,3 +93,6 @@ _bake_profile/
 #
 # 다시 만드는 법: python _bake_sprites.py
 static/sprites/
+
+# Live2D 공식 샘플 — 무료 소재 라이선스, 저장소에는 안 올린다(이 PC 검증용)
+static/live2d/sample/

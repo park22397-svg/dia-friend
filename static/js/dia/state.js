@@ -43,6 +43,8 @@
         // ============================================================
 
         let currentExpression = 'neutral';
+        // 그 얼굴을 얼마나 짓고 있는가(0~1). 쉬는 얼굴은 옅다. Live2D 몸이 읽는다.
+        let currentExpressionAmount = 1;
 
         let isExpressing = false;
         // 지금 얼굴이 마음이 남긴 쉬는 얼굴인가(dia/heart.js)

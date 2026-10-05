@@ -432,9 +432,11 @@ def _js_ver():
 
 @app.route("/")
 def index():
+    from config import LIVE2D_MODEL
     return render_template(
         "index.html",
         js_ver=_js_ver(),
+        live2d_model=LIVE2D_MODEL,
     )
 
 

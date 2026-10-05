@@ -179,6 +179,7 @@
 
                 if (!proxy) return;
                 currentExpression = expression;
+                currentExpressionAmount = k;
                 isExpressing = expression !== 'neutral' && !resting;
 
                 // 지울 이름은 개체가 알려준 목록을 쓴다.
