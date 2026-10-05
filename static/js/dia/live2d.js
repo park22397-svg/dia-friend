@@ -107,8 +107,11 @@
                 if (head) { hx = head.rotation.x * DEG; hy = head.rotation.y * DEG; hz = head.rotation.z * DEG; }
             } catch (e) {}
             // Live2D 는 ±30 범위. 3D 고개 각도는 작아서 조금 키워 보인다.
-            live2dSet('ParamAngleX', Math.max(-30, Math.min(30, hy * 1.5)));
-            live2dSet('ParamAngleY', Math.max(-30, Math.min(30, hx * 1.5)));
+            // 좌우·상하는 그림 한 장을 휘는 것이라 끝까지 돌리면 얼굴이 깨진다 → 절반(±15)만 쓴다.
+            // 갸웃(Z)은 통째로 돌리는 것이라 깨지지 않아 그대로 둔다.
+            const TURN = 15;
+            live2dSet('ParamAngleX', Math.max(-TURN, Math.min(TURN, hy * 0.75)));
+            live2dSet('ParamAngleY', Math.max(-TURN, Math.min(TURN, hx * 0.75)));
             live2dSet('ParamAngleZ', Math.max(-30, Math.min(30, -hz * 1.5)));
             live2dSet('ParamBodyAngleX', Math.max(-10, Math.min(10, hy * 0.4)));
 
