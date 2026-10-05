@@ -1244,6 +1244,10 @@
            스크립트가 켜도(display:block) 이 줄이 이긴다. 되돌리려면 이 규칙만 지운다. */
         #speech-bubble { display: none !important; }
 
+        /* 조이스틱과 점프·앉기 단추도 감춘다(2026-10-05 사용자 지시).
+           키보드(WASD·스페이스·Shift)는 그대로 된다. 되돌리려면 이 규칙만 지운다. */
+        #stick-pad, #stick-keys { display: none !important; }
+
         #speech-bubble::after {
             content: '';
             position: absolute;
