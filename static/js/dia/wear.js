@@ -649,6 +649,48 @@
         }
 
 
+        // ------------------------------------------------------------
+        // 바탕 신발과 옷의 신발이 겹치던 것 (2026-10-06)
+        //
+        // 바탕 아바타(avatar.vrm)는 낮은 검은 운동화(N00_004 Shoes)를 신고
+        // 있고, 교복(w_16512ae814.vrm)은 제 하이탑(N00_006 Shoes)을 들고
+        // 온다. 둘 다 보이게 두었더니 같은 자리에서 두 신발이 서로 뚫고
+        // 나와, 하이탑 앞코에 운동화의 흰 줄이 깨진 조각처럼 박혔다
+        // ("다이아 신발이 이상해").
+        //
+        // 옷이 그 자리(신발)를 들고 왔으면 바탕 것은 감춘다. 옷을 벗으면
+        // 다시 보인다. 감춘 동안은 PARTS 에도 안 넣는다 — 두 번 눌러
+        // 벗기기가 감춘 신발을 도로 켜면 안 된다.
+        //
+        // 머리·안경은 넣지 않는다. 바탕 머리 위에 얹는 것일 수 있다.
+        // ------------------------------------------------------------
+        const WEAR_REPLACES = ['shoes'];
+
+        function wornReplaceZones() {
+            const zones = {};
+            Object.keys(WEAR).forEach(k => {
+                const it = WEAR[k] && WEAR[k].item;
+                ((it && it.parts) || []).forEach(p => {
+                    if (p && WEAR_REPLACES.indexOf(p.zone) >= 0) zones[p.zone] = true;
+                });
+            });
+            return zones;
+        }
+
+        // 감췄으면 true. 덮던 옷을 벗었으면 도로 보이게 한다.
+        function hideUnderWear(o, part, covered) {
+            if (covered[part]) {
+                o.visible = false;
+                o.userData.underWear = true;
+                return true;
+            }
+            if (o.userData.underWear) {
+                o.visible = true;
+                o.userData.underWear = false;
+            }
+            return false;
+        }
+
         function splitParts() {
             Object.keys(PARTS).forEach(k => PARTS[k] = []);
 
@@ -660,6 +702,8 @@
             Object.keys(WEAR).forEach(k => {
                 if (WEAR[k]) roots.push(WEAR[k].vrm.scene);
             });
+
+            const covered = wornReplaceZones();
 
             roots.forEach(root => root.traverse(o => {
                 if (!o.isMesh && !o.isSkinnedMesh) return;
@@ -676,6 +720,9 @@
                     + (idx ? idx.count / 3 : '?') + ' -> ' + part);
 
                 o.userData.part = part;
+
+                // 걸친 옷이 같은 자리를 새로 들고 왔으면 바탕 것은 감춘다.
+                if (root === currentVRM.scene && hideUnderWear(o, part, covered)) return;
 
                 PARTS[part].push(o);
             }));
