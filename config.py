@@ -227,7 +227,8 @@ MAX_HISTORY_MESSAGES = 12
 # 사용자가 Downloads/free_tts_normal.mp3 를 골랐다. 그 파일은 edge-tts
 # 형식(24kHz·48kbps 모노 mp3)이고, 목소리 후보의 "00b SunHi 보통 속도"와
 # 같은 문장·같은 결인데 음만 낮다(중앙값 210Hz, 00b 는 225Hz).
-# 그래서 보통 속도(+0%) 에 음 -12Hz 로 맞췄다.
+# 처음에는 보통 속도(+0%)·음 -12Hz 로 맞췄는데 "너무 낮고 느리다" 해서
+# +20%·+0Hz 로 올렸다(2026-10-06).
 #
 # 다른 하나는 Gemini 레다(2026-10-02~06). 목소리는 좋지만 무료 키가
 # 분당 3번(GenerateRequestsPerMinutePerProjectPerModel-FreeTier)이라
@@ -245,8 +246,8 @@ TTS_PROVIDER = os.environ.get("TTS_PROVIDER", "").strip() or "edge"
 
 # edge 를 쓸 때. rate·pitch 는 문자열이다("+10%", "-5Hz" 처럼).
 TTS_EDGE_VOICE = "ko-KR-SunHiNeural"
-TTS_EDGE_RATE = "+0%"
-TTS_EDGE_PITCH = "-12Hz"
+TTS_EDGE_RATE = "+20%"
+TTS_EDGE_PITCH = "+0Hz"
 
 # gemini 를 쓸 때의 목소리
 TTS_VOICE = "Leda"
