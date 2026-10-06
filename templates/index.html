@@ -1726,6 +1726,28 @@
             #wear-menu, #look-menu { max-height: 34vh; }
         }
 
+        /* 폰 세로 화면에서 이름표가 다이아의 오른쪽 신발을 덮었다(2026-10-06,
+           다이아를 앞으로 당긴 뒤). 가로로 길게 늘어선 알약을 이름 위·단추 아래
+           두 줄로 세워 폭을 줄인다 — 오른쪽 아래 구석에만 머문다. */
+        @media (max-width: 600px) {
+            #who-badge {
+                flex-direction: column;
+                align-items: flex-end;
+                gap: 4px;
+                padding: 5px 7px;
+                border-radius: 12px;
+                right: 8px;
+                bottom: 10px;
+            }
+            #who-name {
+                max-width: 84px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                font-size: 0.72rem;
+            }
+        }
+
         /* 아주 좁은 화면(구형 폰). 아바타를 조금 더 준다. */
         @media (max-width: 400px) {
             #avatar-container { height: 48vh; min-height: 240px; }
