@@ -58,9 +58,18 @@
         // 다이아가 그만큼 커진다. 발끝을 지키려고 머리 위 여백을 거의 다
         // 썼다(렌즈 올림 0.385 -> 0.435). 더 당기면 화각을 넓히거나 발이 빠진다.
         const VIEW_BACK = 0.99;        // 물러나는 거리(m)
-        const VIEW_SHIFT = 0.435;      // 렌즈 올림(화면 높이의 비율)
+        const VIEW_SHIFT = 0.425;      // 렌즈 올림(화면 높이의 비율)
         const VIEW_OPEN = 1.25;
         const VIEW_CLOSE = 0.6;
+
+        // 시점을 10cm 내리고 아주 살짝 올려다본다(2026-10-06 "시점을 y축 10
+        // 정도" — 처음엔 올렸다가 "반대 방향으로" 해서 내렸다). 카메라만이다 —
+        // 눈(userEye)은 그대로라 손 닿는 거리·따라오기·입맞춤은 안 바뀐다.
+        // 물러남과 같이 fit 만큼 걸려서 바짝 다가가면 눈 자리로 돌아온다.
+        // 내려간 만큼 다이아가 화면 위로 올라가므로 고개를 들고 렌즈 올림을 맞췄다.
+        const VIEW_RAISE = -0.10;      // 카메라 높이 차(m). 음수면 내린다
+        const VIEW_TILT = -2 * Math.PI / 180;  // 숙이는 각(rad). 음수면 올려다본다
+
 
         // 처음 서는 자리(다이아에게서 m). locomotion.follow_near 와 같게 —
         // 다르면 다이아가 처음 따라올 때 화면이 한 번 커지거나 작아진다.
@@ -203,10 +212,10 @@
 
             camera.position.set(
                 user.x - userForwardX() * back,
-                user.eye + user.lift,
+                user.eye + user.lift + VIEW_RAISE * fit,
                 user.z - userForwardZ() * back
             );
-            camera.rotation.set(user.pitch, user.yaw + Math.PI, 0);
+            camera.rotation.set(user.pitch - VIEW_TILT * fit, user.yaw + Math.PI, 0);
             applyFrameLift(FRAME_LIFT + (VIEW_SHIFT - FRAME_LIFT) * fit);
 
             // 투명한 몸도 같이 간다. 앉으면 낮아지고 뛰면 뜬다.

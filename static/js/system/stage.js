@@ -69,7 +69,9 @@
         // "반만큼 앞으로"(user.js 의 VIEW_BACK·USER_START_Z)에서도 40 그대로
         // 발끝까지 들어온다. 더 당기면 따라와 선 자리에서 발이 빠지니 그때
         // 여기를 같이 넓힐 것. — "반만 더"(2.56m)에서 그래서 41 로 넓혔다.
-        const VIEW_FOV = 41;
+        // 시점을 10cm 내려 올려다보게 하니(user.js VIEW_RAISE·VIEW_TILT) 머리끝과
+        // 발끝이 화면 끝에 닿아 42 로 1도 더 넓혔다.
+        const VIEW_FOV = 42;
 
         const camera = new THREE.PerspectiveCamera(
             VIEW_FOV,
