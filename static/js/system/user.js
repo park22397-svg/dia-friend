@@ -45,14 +45,23 @@
         // VIEW_CLOSE 안으로 들어오면 눈 자리로 돌아온다(사이는 부드럽게).
         // 화각(VIEW_FOV)은 stage.js 에 있다. 셋을 같이 맞춘 값이다 —
         // 1280x800 과 390x844 에서 머리끝·발끝이 다 들어온다.
-        const VIEW_BACK = 1.35;        // 물러나는 거리(m)
-        const VIEW_SHIFT = 0.36;       // 렌즈 올림(화면 높이의 비율)
+        //
+        // 2026-10-06 "아바타 한 개만큼 앞으로 더 오게" — 물러나는 거리를
+        // 1.35 -> 0.9 로 당기고, 처음 서는 자리를 1.65 -> 1.35(다이아가
+        // 따라와 서는 거리 follow_near)로 맞췄다. 그래서 처음 화면과
+        // 따라와 선 화면이 같다 — 카메라~다이아 3.0m -> 2.25m.
+        const VIEW_BACK = 0.9;         // 물러나는 거리(m)
+        const VIEW_SHIFT = 0.37;       // 렌즈 올림(화면 높이의 비율)
         const VIEW_OPEN = 1.25;
         const VIEW_CLOSE = 0.6;
 
+        // 처음 서는 자리(다이아에게서 m). locomotion.follow_near 와 같게 —
+        // 다르면 다이아가 처음 따라올 때 화면이 한 번 커지거나 작아진다.
+        const USER_START_Z = 1.35;
+
         const user = {
             on: true,            // 상대가 화면 안에 서 있다 (카메라가 곧 눈)
-            x: 0, z: 1.65,       // 발이 딛고 선 자리
+            x: 0, z: USER_START_Z, // 발이 딛고 선 자리
             yaw: Math.PI,        // 보는 방향. PI 면 -z(다이아) 쪽
             pitch: 0,            // 위아래로 든 고개
             lift: 0, vy: 0,      // 뛰어오른 높이와 속도
@@ -608,7 +617,7 @@
             camFree = false;
 
             if (user.on) {
-                user.x = 0; user.z = 1.65;
+                user.x = 0; user.z = USER_START_Z;
                 user.yaw = Math.PI; user.pitch = 0;
                 user.lift = 0; user.vy = 0;
                 userNoticed = false;
