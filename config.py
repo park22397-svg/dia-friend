@@ -222,23 +222,33 @@ MAX_HISTORY_MESSAGES = 12
 # ============================================================
 # 목소리 (TTS)
 #
-# **Gemini 의 레다(Leda, Youthful) 하나만 쓴다.** (2026-10-02)
+# **지금은 Edge 선희(edge-tts) — 키도 횟수 제한도 없다.** (2026-10-06)
 #
-# 사용자가 목소리 후보(다이아 관련 파일\다이아_목소리후보\
-# Gemini_Leda_(Youthful).wav)를 듣고 골랐다. 그 견본은 _voice_try.py 가
-# 아래 TTS_STYLE 로 만든 것이라, 말투 지시도 그대로 둔다.
+# 사용자가 Downloads/free_tts_normal.mp3 를 골랐다. 그 파일은 edge-tts
+# 형식(24kHz·48kbps 모노 mp3)이고, 목소리 후보의 "00b SunHi 보통 속도"와
+# 같은 문장·같은 결인데 음만 낮다(중앙값 210Hz, 00b 는 225Hz).
+# 그래서 보통 속도(+0%) 에 음 -12Hz 로 맞췄다.
 #
-# 예전에 있던 브라우저 목소리와 Edge(선희)는 지웠다. 레다를 못 만들면
-# 다른 목소리로 내려가지 않고 그 말은 조용히 넘어간다 — 콘솔에 왜
-# 그런지 남는다.
+# 다른 하나는 Gemini 레다(2026-10-02~06). 목소리는 좋지만 무료 키가
+# 분당 3번(GenerateRequestsPerMinutePerProjectPerModel-FreeTier)이라
+# 대화 중에 자주 끊겼다. TTS_PROVIDER 를 "gemini" 로 두면 돌아간다.
 #
-# 열쇠는 이 파일이 아니라 옆의 `.gemini_key`(올린 데서는 환경변수
-# GEMINI_API_KEY)로 둔다. 무료 등급은 하루에 부를 수 있는 횟수가 적다.
-# 같은 말은 _voice_cache 에 떠 두어 두 번째부터는 부르지 않는다.
+# 어느 쪽이든 못 만들면 다른 목소리로 내려가지 않는다 — 그 말은
+# 조용히 넘어가고 콘솔에 왜 그런지 남는다.
+# 같은 말은 _voice_cache 에 떠 두어 두 번째부터는 다시 안 만든다.
 # ============================================================
 
 TTS_ENABLED = True
 
+# "edge" 또는 "gemini"
+TTS_PROVIDER = os.environ.get("TTS_PROVIDER", "").strip() or "edge"
+
+# edge 를 쓸 때. rate·pitch 는 문자열이다("+10%", "-5Hz" 처럼).
+TTS_EDGE_VOICE = "ko-KR-SunHiNeural"
+TTS_EDGE_RATE = "+0%"
+TTS_EDGE_PITCH = "-12Hz"
+
+# gemini 를 쓸 때의 목소리
 TTS_VOICE = "Leda"
 
 

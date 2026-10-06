@@ -1589,23 +1589,26 @@ def undress_api():
 # ============================================================
 # 목소리
 #
-# Gemini 의 레다(Leda) 하나만 쓴다(config 참고). 서버가 소리를 만들어
-# 내려보내고, 화면은 /api/tts 로 문장을 보내 소리를 받아 간다.
-# /api/tts/config 는 켜져 있는지와 목소리 이름만 알려 준다.
+# config 의 TTS_PROVIDER 하나만 쓴다 — edge(선희) 또는 gemini(레다).
+# 서버가 소리를 만들어 내려보내고, 화면은 /api/tts 로 문장을 보내
+# 소리를 받아 간다. /api/tts/config 는 켜져 있는지와 목소리 이름만 알려 준다.
 # ============================================================
 
 @app.route("/api/tts/config")
 def tts_config_api():
 
-    from config import TTS_ENABLED, TTS_VOICE, TTS_API_KEY
+    from config import (TTS_ENABLED, TTS_PROVIDER, TTS_VOICE,
+                        TTS_EDGE_VOICE, TTS_API_KEY)
+
+    edge = TTS_PROVIDER == "edge"
 
     return jsonify(
         {
             "enabled": bool(TTS_ENABLED),
-            "provider": "gemini",
-            "voice": TTS_VOICE,
-            # 열쇠가 없으면 말은 조용히 넘어간다. 화면이 알 수 있게.
-            "ready": bool(TTS_API_KEY),
+            "provider": TTS_PROVIDER,
+            "voice": TTS_EDGE_VOICE if edge else TTS_VOICE,
+            # 만들 수 없으면 말은 조용히 넘어간다. 화면이 알 수 있게.
+            "ready": True if edge else bool(TTS_API_KEY),
         }
     )
 
@@ -1655,6 +1658,51 @@ def _voice_cache_put(path, payload):
     except OSError:
         # 올린 데서는 못 쓴다. 그래도 소리는 이미 만들어졌다.
         pass
+
+
+def _tts_edge(text):
+    """Edge 의 읽어주기 목소리(선희). mp3 로 바로 온다. 실패하면 None.
+
+    키도 횟수 제한도 없다. 다만 공식 API 가 아니라 커뮤니티가 Edge 의
+    통신을 뜯어 만든 것이라 약관상 회색지대다(개인용 전제).
+    """
+    try:
+        import asyncio
+        import base64
+
+        import edge_tts
+
+        from config import TTS_EDGE_VOICE, TTS_EDGE_RATE, TTS_EDGE_PITCH
+
+        async def make():
+            c = edge_tts.Communicate(
+                text,
+                TTS_EDGE_VOICE,
+                rate=TTS_EDGE_RATE,
+                pitch=TTS_EDGE_PITCH,
+            )
+            buf = b""
+            async for chunk in c.stream():
+                if chunk["type"] == "audio":
+                    buf += chunk["data"]
+            return buf
+
+        audio = asyncio.run(make())
+
+        if not audio:
+            raise RuntimeError("소리가 비었다")
+
+        return {
+            "ok": True,
+            "provider": "edge",
+            "voice": TTS_EDGE_VOICE,
+            "mime": "audio/mpeg",
+            "audio": base64.b64encode(audio).decode("ascii"),
+        }
+
+    except Exception as e:
+        print(f"[목소리 오류 - edge]: {e}")
+        return None
 
 
 def _tts_gemini(text):
@@ -1715,7 +1763,9 @@ def _tts_gemini(text):
 @app.route("/api/tts", methods=["POST"])
 def tts_api():
 
-    from config import TTS_ENABLED, TTS_VOICE, TTS_API_KEY, TTS_STYLE
+    from config import (TTS_ENABLED, TTS_PROVIDER, TTS_VOICE, TTS_API_KEY,
+                        TTS_STYLE, TTS_EDGE_VOICE, TTS_EDGE_RATE,
+                        TTS_EDGE_PITCH)
 
     if not TTS_ENABLED:
         return jsonify({"ok": False, "error": "목소리가 꺼져 있습니다."}), 400
@@ -1727,7 +1777,11 @@ def tts_api():
         return jsonify({"ok": False, "error": "읽을 말이 없습니다."}), 400
 
     # 떠 둔 것이 있으면 그것을 쓴다. 부르지도 않고 기다리지도 않는다.
-    path = _voice_cache_path("gemini", TTS_VOICE, TTS_STYLE, text)
+    if TTS_PROVIDER == "edge":
+        path = _voice_cache_path("edge", TTS_EDGE_VOICE, TTS_EDGE_RATE,
+                                 TTS_EDGE_PITCH, text)
+    else:
+        path = _voice_cache_path("gemini", TTS_VOICE, TTS_STYLE, text)
 
     got = _voice_cache_get(path)
 
@@ -1735,9 +1789,12 @@ def tts_api():
         got["cached"] = True
         return jsonify(got)
 
-    # 레다 하나만 쓴다. 못 만들면 다른 목소리로 내려가지 않는다 —
-    # 조용하고, 왜 그런지 적힌다.
-    if not TTS_API_KEY:
+    # 정해진 목소리 하나만 쓴다. 못 만들면 다른 목소리로 내려가지
+    # 않는다 — 조용하고, 왜 그런지 적힌다.
+    if TTS_PROVIDER == "edge":
+        out = _tts_edge(text)
+        why = "edge 가 소리를 못 만들었습니다"
+    elif not TTS_API_KEY:
         why = "Gemini 열쇠가 없습니다 (.gemini_key 또는 GEMINI_API_KEY)"
         out = None
     else:
