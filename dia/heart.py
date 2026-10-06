@@ -41,7 +41,8 @@ EMOTIONS = [
 # 몸이 지을 자세. 얼굴처럼 몸의 말이다 — 다이아에게 시키는 규칙이 아니다.
 #
 #   head_x  고개 앞뒤(도). 음수가 숙임, 양수가 젖힘(실측 — 모델이 -Z 를 본다)
-#   head_z  고개 갸웃(도)
+#   head_z  고개 갸웃(도). 전부 0 — 마음이 세면 고개가 한쪽으로 계속 기운 채 있어서
+#           (애정·설렘·부끄러움이 섞여 4.5도) "고개가 기울어져 있다" 고 했다(2026-10-06)
 #   away    시선을 피하는 정도(도). 말할 때는 반만 피한다
 #   bob     숨·흔들림 크기(1 = 평소)
 #   pace    숨·흔들림 빠르기(1 = 평소)
@@ -50,14 +51,14 @@ EMOTIONS = [
 #   gesture 마음이 셀 때 혼자 가끔 하는 몸짓(avatar.py 의 동작 이름). 없으면 None
 POSE = {
     "기쁨":     {"head_x":  2, "head_z": 0, "away":  0, "bob": 1.6, "pace": 1.4, "jitter": 0, "voice": 1.05, "gesture": None},
-    "설렘":     {"head_x":  1, "head_z": 4, "away":  0, "bob": 1.8, "pace": 1.7, "jitter": 0, "voice": 1.07, "gesture": "pose_cheek"},
-    "애정":     {"head_x":  0, "head_z": 6, "away":  0, "bob": 1.0, "pace": 0.8, "jitter": 0, "voice": 0.98, "gesture": None},
+    "설렘":     {"head_x":  1, "head_z": 0, "away":  0, "bob": 1.8, "pace": 1.7, "jitter": 0, "voice": 1.07, "gesture": "pose_cheek"},
+    "애정":     {"head_x":  0, "head_z": 0, "away":  0, "bob": 1.0, "pace": 0.8, "jitter": 0, "voice": 0.98, "gesture": None},
     "슬픔":     {"head_x": -9, "head_z": 0, "away":  0, "bob": 0.5, "pace": 0.6, "jitter": 0, "voice": 0.93, "gesture": None},
     "서운함":   {"head_x": -6, "head_z": 0, "away":  8, "bob": 0.6, "pace": 0.7, "jitter": 0, "voice": 0.95, "gesture": None},
     "짜증":     {"head_x": -2, "head_z": 0, "away": 12, "bob": 0.3, "pace": 1.0, "jitter": 0, "voice": 1.03, "gesture": "cross"},
     "불안":     {"head_x": -3, "head_z": 0, "away":  3, "bob": 0.8, "pace": 1.3, "jitter": 1, "voice": 1.04, "gesture": None},
-    "부끄러움": {"head_x": -8, "head_z": 5, "away": 10, "bob": 0.8, "pace": 1.1, "jitter": 0, "voice": 0.97, "gesture": "shy"},
-    "외로움":   {"head_x": -7, "head_z": -3, "away": 0, "bob": 0.6, "pace": 0.6, "jitter": 0, "voice": 0.94, "gesture": None},
+    "부끄러움": {"head_x": -8, "head_z": 0, "away": 10, "bob": 0.8, "pace": 1.1, "jitter": 0, "voice": 0.97, "gesture": "shy"},
+    "외로움":   {"head_x": -7, "head_z": 0, "away": 0, "bob": 0.6, "pace": 0.6, "jitter": 0, "voice": 0.94, "gesture": None},
 }
 
 NAMES = [e[0] for e in EMOTIONS]
