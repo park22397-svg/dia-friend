@@ -17,6 +17,17 @@
         }
 
 
+        // 놀이를 하는 중인가 — 판이 열려 있거나, 선공 가위바위보 중이거나,
+        // 끝말잇기를 주고받는 중. 판에 두는 것도 함께 하는 일이라 그동안은
+        // '조용한' 것이 아니다. 체스를 두는데 먼저 말을 걸었다(2026-10-06).
+        function playingGame() {
+            if (document.querySelector(
+                    '#chess-panel.on, #go-panel.on, #jg-panel.on, #hg-panel.on, #first-box.on')) {
+                return true;
+            }
+            return typeof wcOn !== 'undefined' && !!wcOn;
+        }
+
         function startInactivityTimers() {
 
             resetTimers();
@@ -25,6 +36,12 @@
             talkTimer = setTimeout(() => {
 
                 if (isSleeping || isWaitingForAI) return;
+
+                // 놀이 중이면 대화 중으로 친다. 판이 닫힌 뒤부터 다시 잰다.
+                if (playingGame()) {
+                    startInactivityTimers();
+                    return;
+                }
 
                 // 잠들기 타이머는 firstTalk 이 말을 마친 뒤에 건다.
                 // showReply 가 끝에서 startInactivityTimers 를 다시 부르므로,
@@ -44,6 +61,12 @@
         // ============================================================
 
         async function firstTalk() {
+
+            // 혼자 말 잇기(armSleepTimer)로 올 때도 같다 — 놀이 중이면 걸지 않는다.
+            if (playingGame()) {
+                startInactivityTimers();
+                return;
+            }
 
             try {
 
