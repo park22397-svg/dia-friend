@@ -94,8 +94,13 @@ class _Res:
     def json(self):
         return {"message": {"content": self._t}}
 
+    def iter_lines(self):
+        # 대화 창구는 첫 문장 소리를 일찍 만들려고 흘려 받는다(stream).
+        import json as _j
+        yield _j.dumps({"message": {"content": self._t}, "done": True}).encode()
 
-def fake_post(url, json=None, timeout=None):
+
+def fake_post(url, json=None, timeout=None, **kw):
     SENT.append(json)
     return _Res(FAKE[0])
 

@@ -295,6 +295,12 @@
 
             try {
 
+                // 첫 문장 소리를 답보다 먼저 받아 튼다(dia/voice.js voiceEarly).
+                // 같은 번호를 말에 붙여 보내면 서버가 그 번호로 소리를 건넨다.
+                const voiceId = Date.now().toString(36)
+                    + Math.random().toString(36).slice(2, 8);
+                voiceEarly(voiceId);
+
                 const res =
                     await fetch(
                         '/api/chat',
@@ -308,6 +314,7 @@
 
                             body: JSON.stringify({
                                 message: text,
+                                voice_id: voiceId,
 
                                 // 카메라가 켜져 있으면 지금 보이는 것도
                                 // 같이 보낸다. 그래야 평범한 대화가
@@ -453,6 +460,10 @@
                         const after = said ? guessSpeakMs(said) + 260 : 140;
                         setTimeout(() => singSong(data.song), after);
                     }
+
+                    // 서버가 첫 문장의 소리를 미리 만들어 왔으면 목소리에
+                    // 넘겨 둔다. 다음 speak() 가 받자마자 튼다(dia/voice.js).
+                    voice.head = data.voice_head || null;
 
                     // 사진을 찍기로 했다. 말을 마치고 카메라 앞으로 간다.
                     if (data.shoot) {

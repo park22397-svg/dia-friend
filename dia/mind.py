@@ -5,6 +5,8 @@
 혼자 말 잇기. 대화의 진행(놀이 가로채기·만지기·고백)은 system/chat.py 다.
 """
 
+import contextvars
+import json
 import re
 
 import requests
@@ -371,6 +373,75 @@ def _recent(history):
     return out
 
 
+# ------------------------------------------------------------
+# 첫 문장을 먼저 알린다 — 목소리를 일찍 만들기 시작하려고
+#
+# 답을 다 받은 뒤에 목소리를 만들면 '답 1.6초 + 소리 1.3초' 가 줄로 선다.
+# 대화 창구(main.chat_api)가 여기에 받을 곳을 걸어 두면, 모델의 답을
+# 흘려 받으면서 **소리 내어 읽을 첫 문장**이 끝나는 순간 그 글을 넘긴다.
+# 창구는 그 사이에 첫 문장의 소리를 만들어 답과 함께 내려보낸다.
+#
+# 넘기는 글은 화면의 spokenPart() 와 같은 규칙으로 짓는다 — 괄호(상황)·
+# 이모지는 빼고 읽는다. 어긋나면 화면이 이 소리를 버리고 평소대로 한다.
+# ------------------------------------------------------------
+VOICE_HEAD = contextvars.ContextVar("voice_head", default=None)
+
+_HEAD_BRACKET = re.compile(r"[（(][^()（）]*[)）]")
+_HEAD_END = re.compile(r"\s*(.{4,}?[.!?…~])(?=\s)", re.S)
+
+
+def spoken_head(raw):
+    """흘러 들어오는 답에서 '소리 내어 읽을 첫 문장'. 아직 안 끝났으면 None."""
+    s = _HEAD_BRACKET.sub(" ", raw)
+    cut = re.search(r"[（(]", s)          # 아직 안 닫힌 괄호 앞까지만
+    if cut:
+        s = s[:cut.start()]
+    s = "".join(ch for ch in s if not is_emoji(ch))
+    m = _HEAD_END.match(s)
+    if not m:
+        return None
+    head = re.sub(r"\s+", " ", m.group(1)).strip()
+    return head if len(head) >= 4 else None
+
+
+def _ask_stream(payload, hook):
+    """흘려 받으며 첫 문장을 hook 에 넘긴다. 반환은 _ask 와 같다."""
+    payload = dict(payload, stream=True)
+    res = requests.post(config.ollama_url(), json=payload, timeout=60, stream=True)
+
+    if res.status_code == 400 and "think" in payload:
+        print("[알림] 서버가 think 항목을 받지 않아 빼고 다시 보냅니다.")
+        payload.pop("think")
+        res = requests.post(config.ollama_url(), json=payload, timeout=60, stream=True)
+
+    if res.status_code != 200:
+        return None, "http"
+
+    raw, fired = "", False
+    for line in res.iter_lines():
+        if not line:
+            continue
+        try:
+            part = json.loads(line)
+        except ValueError:
+            return None, "json"
+        raw += (part.get("message") or {}).get("content", "") or ""
+        if not fired:
+            head = spoken_head(raw)
+            if head:
+                fired = True
+                try:
+                    hook(head)
+                except Exception as e:
+                    print("[첫 문장 넘기기 오류]:", e)
+        if part.get("done"):
+            break
+
+    if not raw.strip():
+        return None, "empty"
+    return raw.strip(), None
+
+
 def _ask(messages):
     """모델에게 묻는다. 반환: (답 글, None) 또는 (None, 까닭)."""
     payload = {
@@ -378,12 +449,19 @@ def _ask(messages):
         "messages": messages,
         "stream": False,
         "options": dict(OLLAMA_OPTIONS),
+        # 모델을 30분 동안 올려 둔다. 기본 5분이면 조금 쉬었다 말을 걸 때
+        # 다시 싣느라 첫 답이 몇 초 늦는다.
+        "keep_alive": "30m",
     }
     # 속생각은 화면에 쓰이지 않는데 생성 시간은 다 든다. 끄면 3배 빨라진다.
     if OLLAMA_THINK is not None:
         payload["think"] = OLLAMA_THINK
 
     try:
+        hook = VOICE_HEAD.get()
+        if callable(hook):
+            return _ask_stream(payload, hook)
+
         res = requests.post(config.ollama_url(), json=payload, timeout=60)
 
         # 서버가 이 항목을 모르는 판이면 빼고 한 번만 다시 보낸다.
@@ -617,7 +695,8 @@ def _nudge_note(n):
     if n <= 1:
         return ("상대가 아직 아무 말도 하지 않았다. 방금 네가 한 말에 답이 없다. "
                 "기다리지 말고 네가 먼저 말을 이어라. "
-                "왜 대답이 없는지 짚어도 되고, 다른 말을 꺼내도 된다.")
+                "왜 대답이 없는지 짚어도 되고, 다른 말을 꺼내도 된다. "
+                "다른 말을 꺼낼 때도 지금까지 나눈 이야기와 이어지는 것으로.")
 
     if n <= 3:
         return (f"네가 {n}번 말했는데 상대는 한 번도 답하지 않았다. "
@@ -670,6 +749,59 @@ def keep_talking():
         "cues": got["cues"],
         "expression": got["expression"],
         "unanswered": n + 1,
+        "feel": got.get("feel"),
+    }
+
+
+# 먼저 말 걸기 — 지금까지 한 이야기에서 이어서
+#
+# 예전에는 사이마다 정해 둔 문장 중 하나를 골랐다("뭐 해?" 같은).
+# 방금까지 시험 얘기를 하다가 조용해졌는데 "오늘 날씨 좋다" 가
+# 나오면 대화가 끊긴다. 기록을 보고 이어지는 말을 짓는다.
+# 기록이 없거나 모델을 못 부르면 None — 부르는 쪽이 정해 둔 문장을 쓴다.
+_FIRST_NOTE = ("상대가 한동안 아무 말이 없다. 네가 먼저 말을 건다. "
+               "새로 인사하거나 엉뚱한 화제를 꺼내지 말고, 지금까지 나눈 "
+               "이야기에서 이어지는 말이나 그와 관련 있는 말을 해라 — "
+               "상대가 했던 말 한 대목을 집어서 묻거나 덧붙이면 좋다. "
+               "바로 앞에서 네가 한 말은 되풀이하지 말고 한 걸음 더 나아가라. "
+               "한두 문장으로 짧게.")
+
+
+def talk_first():
+    saved = load_relationship() or {}
+    affinity = saved.get(
+        "affinity", AVATAR.relationship.get("start_affinity", 0))
+    stage = AVATAR.next_stage(affinity, saved.get("stage"),
+                              AVATAR.gate_grants(saved))
+
+    try:
+        history = load_memory()
+    except Exception as e:
+        print(f"[먼저 말 걸기 - 기억 오류]: {e}")
+        return None
+
+    # 이을 이야기가 없으면 지어낼 것도 없다
+    if not any(isinstance(h, dict) and h.get("role") == "user"
+               for h in (history or [])):
+        return None
+
+    got = think(
+        stage=stage,
+        user_name=load_user_name(),
+        notes=[{"role": "system", "content": _FIRST_NOTE}],
+        affinity=saved.get("affinity"),
+        lover=bool(saved.get("lover", False)),
+    )
+
+    if not got.get("ok"):
+        return None
+
+    print(f"[먼저 말 걸기]: 이야기에서 이어서 · {stage.label}")
+
+    return {
+        "reply": got["reply"],
+        "cues": got["cues"],
+        "expression": got["expression"],
         "feel": got.get("feel"),
     }
 

@@ -81,8 +81,51 @@
         // 그래서 번호를 매겨 두고, 돌아왔을 때 번호가 바뀌었으면 버린다.
         let voiceTurn = 0;
 
+        // ------------------------------------------------------------
+        // 답보다 먼저 여는 입
+        //
+        // 말을 보내자마자 같은 번호로 첫 문장 소리를 기다린다. 서버는
+        // 모델이 첫 문장을 끝내고 소리를 만든 순간 돌려준다 — 답이 다
+        // 쓰이기 전이다. 받으면 바로 튼다. 답이 오면 speak() 가 이 소리를
+        // 끊지 않고 나머지만 잇는다.
+        // ------------------------------------------------------------
+        async function voiceEarly(id) {
+            if (!voice.on) return;
+            const mine = voiceTurn;
+            let d = null;
+            try {
+                d = await fetch('/api/voice/head?id=' + encodeURIComponent(id))
+                    .then(r => r.json());
+            } catch (e) { return; }
+
+            // 그새 다른 말이 시작됐거나 답이 먼저 와서 말하기 시작했으면 쓰지 않는다.
+            if (!d || !d.ok || !d.audio || mine !== voiceTurn) return;
+
+            const A = await loadVoiceAudio(d);
+            if (!A || mine !== voiceTurn) return;
+
+            stopVoice();
+            const early = { text: d.text, turn: ++voiceTurn, a: A.a, ms: A.ms,
+                            at: Date.now(), ended: false };
+            A.a.addEventListener('ended', () => { early.ended = true; });
+            voice.early = early;
+            voice.audio = A.a;
+            playVoiceAudio(A.a);
+        }
+
         async function speak(text) {
             if (!voice.on || !text) return 0;
+
+            // 첫 문장이 이미 나고 있으면(voiceEarly) 끊지 않고 나머지만 잇는다.
+            const early = voice.early;
+            voice.early = null;
+            if (early && early.turn === voiceTurn) {
+                const rest = cutSpokenPrefix(text, early.text);
+                if (rest !== null) {
+                    voice.head = null;
+                    return continueAfter(early, rest);
+                }
+            }
 
             const mine = ++voiceTurn;
 
@@ -101,76 +144,70 @@
             // 서버가 만든 소리를 받아서 튼다.
             // edge 는 mp3 라 바로 틀고, gemini 는 헤더 없는 PCM 이라 wav 로 싼다.
             //
-            // provider 가 아직 null 이면(못 물어봤으면) 그래도 서버를
-            // 불러 본다.
-            {
-                let d = null;
+            // **첫 문장부터 튼다.** 답 전체의 소리를 기다리면 길수록 늦게
+            // 입을 연다. 첫 문장만 먼저 틀고, 그동안 나머지를 받아 이어 튼다.
+            // 대화 창구는 첫 문장 소리를 답과 함께 보내 준다(voice.head) —
+            // 그러면 받자마자 소리가 난다.
+            try {
+                let first = null, rest = '', firstData = null;
 
-                try {
-                    d = await fetch('/api/tts', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ text }),
-                    }).then(r => r.json());
-
-                    // 기다리는 사이에 다음 말이 시작됐으면 이것은 버린다.
-                    if (mine !== voiceTurn) return 0;
-
-                    if (d.ok && d.audio) {
-                        const mime = d.mime || '';
-                        const src = mime.indexOf('L16') >= 0
-                            ? pcmToWav(d.audio, mime)
-                            : 'data:' + (mime || 'audio/mpeg')
-                              + ';base64,' + d.audio;
-
-                        const a = new Audio(src);
-                        voice.audio = a;
-
-                        // 마음이 목소리에도 묻는다(dia/heart.js). 서운하면 조금
-                        // 느리고 낮게, 설레면 조금 빠르고 높게. 소리를 다시
-                        // 만들지 않고 재생 속도로만 바꾼다 — 떠 둔 소리를 그대로 쓴다.
-                        const tempo = heartVoiceRate();
-                        if (tempo !== 1) {
-                            a.preservesPitch = false;
-                            a.webkitPreservesPitch = false;
-                            a.playbackRate = tempo;
-                        }
-
-                        // 소리 길이를 알아야 입을 맞출 수 있다.
-                        // 다 읽히기를 기다렸다가 튼다 — 그래야 길이가 나온다.
-                        const ms = await new Promise(res => {
-                            a.onloadedmetadata = () => {
-                                // 빨리 틀면 그만큼 짧게 끝난다. 입도 그 길이에 맞춘다.
-                                res(isFinite(a.duration) ? a.duration * 1000 / tempo : 0);
-                            };
-                            a.onerror = () => res(0);
-                            setTimeout(() => res(0), 1500);
-                        });
-
-                        // 길이를 재는 동안에도 다음 말이 시작될 수 있다.
-                        // 여기서 한 번 더 본다 — 틀기 직전이 마지막 자리다.
-                        if (mine !== voiceTurn) {
-                            if (voice.audio === a) voice.audio = null;
-                            return 0;
-                        }
-
-                        // 창을 한 번도 안 누른 채로 소리를 내려 하면
-                        // 브라우저가 막는다(자동재생 정책). 그때는
-                        // 조용히 넘어가지 말고 남긴다 — 안 그러면
-                        // '소리가 안 난다'의 원인을 못 찾는다.
-                        a.play().catch(err => {
-                            console.warn('[diamondAI] 소리를 못 틀었다 — '
-                                + '화면을 한 번 눌러 주세요', err);
-                        });
-
-                        return ms;
+                const head = voice.head;
+                voice.head = null;
+                if (head && head.audio && head.text) {
+                    const r = cutSpokenPrefix(text, head.text);
+                    if (r !== null) {
+                        first = head.text;
+                        rest = r;
+                        firstData = { ok: true, audio: head.audio, mime: head.mime };
                     }
-                    // 여기까지 왔으면 서버가 소리를 못 준 것이다.
-                    console.warn('[diamondAI] 목소리 없음 — ' + why(d), text);
-
-                } catch (e) {
-                    console.warn('[diamondAI] 목소리 창구를 못 불렀다', e);
                 }
+                if (first === null) {
+                    [first, rest] = splitFirstSentence(text);
+                }
+
+                // 나머지는 지금 바로 부탁해 둔다 — 첫 문장이 나는 동안 온다.
+                const restP = rest ? fetchVoice(rest) : null;
+
+                if (!firstData) firstData = await fetchVoice(first);
+
+                // 기다리는 사이에 다음 말이 시작됐으면 이것은 버린다.
+                if (mine !== voiceTurn) return 0;
+
+                if (!firstData || !firstData.ok || !firstData.audio) {
+                    // 여기까지 왔으면 서버가 소리를 못 준 것이다.
+                    console.warn('[diamondAI] 목소리 없음 — ' + why(firstData), first);
+                    voice.lastFail = { text: text, at: Date.now() };
+                    return 0;
+                }
+
+                const A = await loadVoiceAudio(firstData);
+
+                // 길이를 재는 동안에도 다음 말이 시작될 수 있다.
+                // 여기서 한 번 더 본다 — 틀기 직전이 마지막 자리다.
+                if (!A || mine !== voiceTurn) return 0;
+
+                voice.audio = A.a;
+
+                // 첫 문장이 끝나면 나머지를 잇는다.
+                if (restP) {
+                    A.a.onended = async () => {
+                        const d2 = await restP;
+                        if (mine !== voiceTurn || !d2 || !d2.ok || !d2.audio) return;
+                        const B = await loadVoiceAudio(d2);
+                        if (!B || mine !== voiceTurn) return;
+                        voice.audio = B.a;
+                        playVoiceAudio(B.a);
+                    };
+                }
+
+                playVoiceAudio(A.a);
+
+                // 입과 말풍선이 쓸 길이. 나머지는 첫 문장의 빠르기로 어림한다.
+                const n1 = Math.max(1, nonSpace(first));
+                return A.ms + (rest ? A.ms * nonSpace(rest) / n1 : 0);
+
+            } catch (e) {
+                console.warn('[diamondAI] 목소리 창구를 못 불렀다', e);
             }
 
             // 다른 목소리로 내려가지 않는다. 예비가 있으면 실패가
@@ -178,6 +215,102 @@
             voice.lastFail = { text: text, at: Date.now() };
 
             return 0;
+        }
+
+        // 먼저 튼 첫 문장 뒤에 나머지를 잇는다. 반환: 남은 말의 길이(ms).
+        async function continueAfter(early, rest) {
+            const mine = early.turn;
+            const left = Math.max(0, early.ms - (Date.now() - early.at));
+            if (!rest) return left;
+
+            const restP = fetchVoice(rest);
+            const go = async () => {
+                const d2 = await restP;
+                if (mine !== voiceTurn || !d2 || !d2.ok || !d2.audio) return;
+                const B = await loadVoiceAudio(d2);
+                if (!B || mine !== voiceTurn) return;
+                voice.audio = B.a;
+                playVoiceAudio(B.a);
+            };
+            if (early.ended) go();
+            else early.a.addEventListener('ended', go);
+
+            const n1 = Math.max(1, nonSpace(early.text));
+            return left + early.ms * nonSpace(rest) / n1;
+        }
+
+        // 소리 하나를 부탁한다. 실패하면 null.
+        function fetchVoice(t) {
+            return fetch('/api/tts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: t }),
+            }).then(r => r.json()).catch(() => null);
+        }
+
+        // 받은 소리를 틀 준비를 하고 길이를 잰다. 반환: { a, ms } 또는 null.
+        async function loadVoiceAudio(d) {
+            const mime = d.mime || '';
+            const src = mime.indexOf('L16') >= 0
+                ? pcmToWav(d.audio, mime)
+                : 'data:' + (mime || 'audio/mpeg') + ';base64,' + d.audio;
+
+            const a = new Audio(src);
+
+            // 마음이 목소리에도 묻는다(dia/heart.js). 서운하면 조금
+            // 느리고 낮게, 설레면 조금 빠르고 높게. 소리를 다시
+            // 만들지 않고 재생 속도로만 바꾼다 — 떠 둔 소리를 그대로 쓴다.
+            const tempo = heartVoiceRate();
+            if (tempo !== 1) {
+                a.preservesPitch = false;
+                a.webkitPreservesPitch = false;
+                a.playbackRate = tempo;
+            }
+
+            // 소리 길이를 알아야 입을 맞출 수 있다.
+            const ms = await new Promise(res => {
+                a.onloadedmetadata = () => {
+                    // 빨리 틀면 그만큼 짧게 끝난다. 입도 그 길이에 맞춘다.
+                    res(isFinite(a.duration) ? a.duration * 1000 / tempo : 0);
+                };
+                a.onerror = () => res(-1);
+                setTimeout(() => res(0), 1500);
+            });
+
+            return ms < 0 ? null : { a, ms };
+        }
+
+        // 창을 한 번도 안 누른 채로 소리를 내려 하면 브라우저가 막는다
+        // (자동재생 정책). 조용히 넘어가지 말고 남긴다.
+        function playVoiceAudio(a) {
+            a.play().catch(err => {
+                console.warn('[diamondAI] 소리를 못 틀었다 — '
+                    + '화면을 한 번 눌러 주세요', err);
+            });
+        }
+
+        function nonSpace(t) {
+            return String(t || '').replace(/\s+/g, '').length;
+        }
+
+        // 첫 문장과 나머지. 나눌 데가 없으면 [전체, ''].
+        function splitFirstSentence(text) {
+            const m = /^(.{4,}?[.!?…~])\s+/s.exec(text);
+            if (!m || text.length - m[0].length < 4) return [text, ''];
+            return [m[1], text.slice(m[0].length)];
+        }
+
+        // text 가 head 로 시작하면(띄어쓰기는 안 본다) 그 뒤를, 아니면 null.
+        function cutSpokenPrefix(text, head) {
+            const h = String(head).replace(/\s+/g, '');
+            let j = 0, i = 0;
+            for (; i < text.length && j < h.length; i++) {
+                const ch = text[i];
+                if (/\s/.test(ch)) continue;
+                if (ch !== h[j]) return null;
+                j++;
+            }
+            return j === h.length ? text.slice(i).trim() : null;
         }
 
         // 왜 소리가 없는지 한 줄로.

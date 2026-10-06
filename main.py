@@ -5,6 +5,7 @@
 import json
 import os
 import secrets
+import threading
 import time
 from datetime import timedelta
 
@@ -23,6 +24,7 @@ import memory_manager
 import store
 import who
 from ai_brain import extract_expression, process_chat
+from dia.mind import VOICE_HEAD
 from avatar import AVATAR
 from memory_manager import (
     load_memory,
@@ -493,14 +495,28 @@ def chat_api():
         except Exception:
             wc_was = False
 
+        # 첫 문장의 목소리를 답과 나란히 만든다(dia.mind.VOICE_HEAD).
+        # 모델이 첫 문장을 끝내는 순간 소리 만들기를 시작해서, 답이 다
+        # 오는 것과 거의 같이 끝난다. 화면은 받자마자 튼다.
+        head = _VoiceHead.open(data.get("voice_id"))
+        token = VOICE_HEAD.set(head.start)
+
         # 카메라가 켜져 있으면 화면이 '지금 보이는 것' 을 같이 보낸다.
         # 그러면 말을 걸 때마다 다이아가 상대를 보면서 답한다.
-        result = process_chat(
-            user_text,
-            seeing=(data.get("seeing") or None),
-            cut_off=bool(data.get("cut_off")),
-            woke=bool(data.get("woke")),
-        )
+        try:
+            result = process_chat(
+                user_text,
+                seeing=(data.get("seeing") or None),
+                cut_off=bool(data.get("cut_off")),
+                woke=bool(data.get("woke")),
+            )
+        finally:
+            VOICE_HEAD.reset(token)
+            head.finish()
+
+        got = head.result()
+        if got:
+            result["voice_head"] = got
 
         # 답에 (배경: 공원) · (옷: 교복) 이 섞여 있으면 실제로 옮기고 갈아입는다
         result = _apply_shoot(_apply_song(_apply_wear(_apply_place(result))))
@@ -1308,6 +1324,29 @@ def first_talk_api():
                 }
             )
 
+        # 지금까지 한 이야기에서 이어지는 말로 먼저 건다(dia.mind.talk_first).
+        # 정해 둔 문장은 이을 이야기가 없거나 모델을 못 부를 때만 쓴다.
+        from dia.mind import talk_first
+
+        live = talk_first()
+
+        if live:
+            _moved = _apply_wear(_apply_place({"cues": live["cues"]}))
+            return jsonify(
+                {
+                    "speak": True,
+                    "reply": live["reply"],
+                    "cues": _moved.get("cues", live["cues"]),
+                    "place": _moved.get("place"),
+                    "wear": _moved.get("wear"),
+                    "expression": live["expression"],
+                    "feel": live.get("feel"),
+                    "stage": stage.key,
+                    "label": _stage_label(stage),
+                    "affinity": affinity,
+                }
+            )
+
         raw = random.choice(lines)
 
         # 먼저 거는 말도 대화 흐름에 남아야 다음 답이 이어진다
@@ -1760,23 +1799,11 @@ def _tts_gemini(text):
         return None
 
 
-@app.route("/api/tts", methods=["POST"])
-def tts_api():
+def _voice_for(text):
+    """이 글의 소리. 떠 둔 것이 있으면 그것. 반환: (소리, 못 만든 까닭)."""
+    from config import (TTS_PROVIDER, TTS_VOICE, TTS_API_KEY, TTS_STYLE,
+                        TTS_EDGE_VOICE, TTS_EDGE_RATE, TTS_EDGE_PITCH)
 
-    from config import (TTS_ENABLED, TTS_PROVIDER, TTS_VOICE, TTS_API_KEY,
-                        TTS_STYLE, TTS_EDGE_VOICE, TTS_EDGE_RATE,
-                        TTS_EDGE_PITCH)
-
-    if not TTS_ENABLED:
-        return jsonify({"ok": False, "error": "목소리가 꺼져 있습니다."}), 400
-
-    data = request.get_json(silent=True) or {}
-    text = str(data.get("text") or "").strip()
-
-    if not text:
-        return jsonify({"ok": False, "error": "읽을 말이 없습니다."}), 400
-
-    # 떠 둔 것이 있으면 그것을 쓴다. 부르지도 않고 기다리지도 않는다.
     if TTS_PROVIDER == "edge":
         path = _voice_cache_path("edge", TTS_EDGE_VOICE, TTS_EDGE_RATE,
                                  TTS_EDGE_PITCH, text)
@@ -1784,10 +1811,9 @@ def tts_api():
         path = _voice_cache_path("gemini", TTS_VOICE, TTS_STYLE, text)
 
     got = _voice_cache_get(path)
-
     if got:
         got["cached"] = True
-        return jsonify(got)
+        return got, None
 
     # 정해진 목소리 하나만 쓴다. 못 만들면 다른 목소리로 내려가지
     # 않는다 — 조용하고, 왜 그런지 적힌다.
@@ -1802,10 +1828,121 @@ def tts_api():
         why = "gemini 가 소리를 못 만들었습니다 (할당량이거나 오류)"
 
     if out is None:
-        print(f"[목소리]: {why} — 이번 말은 조용히 넘어갑니다.")
-        return jsonify({"ok": False, "error": why}), 200
+        return None, why
 
     _voice_cache_put(path, out)
+    return out, None
+
+
+class _VoiceHead:
+    """첫 문장의 소리를 뒤에서 만든다. 대화 창구 하나에 하나.
+
+    화면은 말을 보내면서 voice_id 를 붙이고, 같은 번호로
+    /api/voice/head 를 함께 부른다. 그 창구는 첫 문장 소리가 되는
+    순간 돌려주므로 **답이 다 쓰이기 전에** 입을 연다. 긴 답일수록
+    차이가 크다(답 2.7초 → 소리 1.4초쯤).
+
+    번호가 없거나(옛 화면) 서버가 여럿이라 못 만나면(올린 데) 답과
+    함께 voice_head 로 가는 것만 남는다 — 그래도 소리는 난다.
+    """
+
+    WAIT_SEC = 1.5      # 답이 다 온 뒤 소리를 더 기다리는 최대 시간
+    KEEP_SEC = 30       # 번호를 들고 있는 시간
+
+    _open = {}
+    _lock = threading.Lock()
+
+    def __init__(self):
+        self.text = None
+        self.out = None
+        self.thread = None
+        self.ready = threading.Event()
+        self.born = time.time()
+
+    @classmethod
+    def open(cls, voice_id):
+        head = cls()
+        key = str(voice_id or "")[:64]
+        if key:
+            with cls._lock:
+                now = time.time()
+                for k in [k for k, v in cls._open.items()
+                          if now - v.born > cls.KEEP_SEC]:
+                    cls._open.pop(k, None)
+                cls._open[key] = head
+        return head
+
+    @classmethod
+    def find(cls, voice_id, wait):
+        """번호의 것을 찾는다. 아직 안 열렸으면 wait 초까지 기다린다."""
+        key = str(voice_id or "")[:64]
+        end = time.time() + wait
+        while True:
+            with cls._lock:
+                head = cls._open.get(key)
+            if head or time.time() >= end:
+                return head
+            time.sleep(0.03)
+
+    def start(self, text):
+        from config import TTS_ENABLED
+        if self.thread is not None or not TTS_ENABLED:
+            return
+        self.text = text
+
+        def run():
+            try:
+                self.out, _ = _voice_for(text)
+            finally:
+                self.ready.set()
+
+        self.thread = threading.Thread(target=run, daemon=True)
+        self.thread.start()
+
+    def finish(self):
+        """답이 끝났다. 첫 문장이 끝내 없었으면 기다리는 쪽을 놓아 준다."""
+        if self.thread is None:
+            self.ready.set()
+
+    def result(self, wait=None):
+        self.ready.wait(self.WAIT_SEC if wait is None else wait)
+        out = self.out
+        if not out or not out.get("ok"):
+            return None
+        return {"text": self.text, "audio": out["audio"],
+                "mime": out.get("mime", "")}
+
+
+@app.route("/api/voice/head")
+def voice_head_api():
+    """첫 문장 소리 — 대화 답보다 먼저. 없으면 ok: false."""
+    head = _VoiceHead.find(request.args.get("id"), wait=3)
+    got = head.result(wait=8) if head else None
+    if not got:
+        return jsonify({"ok": False})
+    return jsonify(dict(got, ok=True))
+
+
+@app.route("/api/tts", methods=["POST"])
+def tts_api():
+
+    from config import TTS_ENABLED
+
+    if not TTS_ENABLED:
+        return jsonify({"ok": False, "error": "목소리가 꺼져 있습니다."}), 400
+
+    data = request.get_json(silent=True) or {}
+    text = str(data.get("text") or "").strip()
+
+    if not text:
+        return jsonify({"ok": False, "error": "읽을 말이 없습니다."}), 400
+
+    # 떠 둔 것이 있으면 그것을 쓴다. 부르지도 않고 기다리지도 않는다.
+    out, why = _voice_for(text)
+
+    if out is None:
+        print(f"[목소리]: {why} — 이번 말은 조용히 넘어갑니다.")
+        return jsonify({"ok": False, "error": why}), 200
 
     return jsonify(out)
 
