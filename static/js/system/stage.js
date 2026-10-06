@@ -209,10 +209,13 @@
                 // 보다 조금 넓게. 발밑에서 바닥이 끝나면 허공에 선 꼴이다.
                 new THREE.CircleGeometry(6.6, 64),
                 new THREE.MeshBasicMaterial({
+                    // 흰 바닥(2026-10-06 "바닥은 흰색으로"). 예전엔 남색이었다.
+                    // 한가운데가 순백이면 흰 밑창·흰 다리가 묻혀서 아주 옅은
+                    // 회청색을 섞었다. 가장자리는 여전히 투명하게 사라진다.
                     map: makeFadeTexture(0, 0, [
-                        [0.0, 'rgba(70,74,112,0.85)'],
-                        [0.55, 'rgba(52,56,88,0.55)'],
-                        [1.0, 'rgba(30,32,54,0)']
+                        [0.0, 'rgba(246,246,250,1)'],
+                        [0.55, 'rgba(236,237,243,0.92)'],
+                        [1.0, 'rgba(225,227,236,0)']
                     ]),
                     transparent: true,
                     depthWrite: false
@@ -227,10 +230,12 @@
             const shadow = new THREE.Mesh(
                 new THREE.CircleGeometry(0.34, 32),
                 new THREE.MeshBasicMaterial({
+                    // 흰 바닥 위에서는 까만 그림자가 얼룩처럼 보여서
+                    // 회청색으로 은은하게. 흰 밑창이 바닥과 갈리는 것도 이것이다.
                     map: makeFadeTexture(0, 0, [
-                        [0.0, 'rgba(0,0,0,0.5)'],
-                        [0.6, 'rgba(0,0,0,0.22)'],
-                        [1.0, 'rgba(0,0,0,0)']
+                        [0.0, 'rgba(70,74,96,0.42)'],
+                        [0.6, 'rgba(70,74,96,0.18)'],
+                        [1.0, 'rgba(70,74,96,0)']
                     ]),
                     transparent: true,
                     depthWrite: false
@@ -246,11 +251,43 @@
 
         // 바닥 — 이게 없으면 걸어도 제자리처럼 보인다.
         // 칸은 0.5m. 넓힌 만큼 칸 수도 늘려야 칸 크기가 그대로다.
-        const floorGrid = new THREE.GridHelper(
-            14, 28, 0x3a3d5c, 0x2a2d44
-        );
-        floorGrid.material.transparent = true;
-        floorGrid.material.opacity = 0.45;
+        //
+        // 흰 바닥 위의 옅은 회색 칸(2026-10-06). GridHelper 를 그대로 쓰면
+        // 원판이 끝난 바깥(어두운 바탕)에서 먼 줄들이 눈높이 근처로 몰려
+        // 밝은 가로줄 무늬가 됐다. 그래서 줄을 칸마다 끊어 그리고, 원판이
+        // 옅어지는 만큼 줄도 같이 옅어지게 꼭짓점마다 투명도를 준다.
+        function makeFadeGrid(size, div, fadeFrom, fadeTo, rgb, alpha) {
+            const half = size / 2, step = size / div;
+            const pos = [], col = [];
+            const a = (x, z) => {
+                const r = Math.hypot(x, z);
+                const k = r <= fadeFrom ? 1
+                    : Math.max(0, 1 - (r - fadeFrom) / (fadeTo - fadeFrom));
+                return alpha * k;
+            };
+            const seg = (x1, z1, x2, z2) => {
+                pos.push(x1, 0, z1, x2, 0, z2);
+                col.push(rgb[0], rgb[1], rgb[2], a(x1, z1),
+                         rgb[0], rgb[1], rgb[2], a(x2, z2));
+            };
+            for (let i = 0; i <= div; i++) {
+                const p = -half + i * step;
+                for (let j = 0; j < div; j++) {
+                    const q = -half + j * step;
+                    seg(p, q, p, q + step);     // 앞뒤 줄
+                    seg(q, p, q + step, p);     // 좌우 줄
+                }
+            }
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+            geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 4));
+            return new THREE.LineSegments(geo, new THREE.LineBasicMaterial({
+                vertexColors: true, transparent: true, depthWrite: false
+            }));
+        }
+
+        const floorGrid = makeFadeGrid(14, 28, 3.5, 6.4,
+            [0.62, 0.64, 0.72], 0.55);
         floorGrid.position.y = -0.2;
         scene.add(floorGrid);
 

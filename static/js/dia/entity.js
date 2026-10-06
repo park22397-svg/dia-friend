@@ -71,6 +71,11 @@
                 return;
             }
 
+            // 장소 그림이 깔리면 우리 바닥(원판·격자)은 걷는다.
+            // 흰 원판과 칸 줄이 그림 아래쪽을 덮고, 눈높이에서 본 격자가
+            // 그림 위로 가로줄처럼 그어졌다. 발밑 그림자만 남는다.
+            if (typeof setFloorVisible === 'function') setFloorVisible(!img);
+
             if (!img) {
                 box.style.backgroundImage = '';
                 return;
