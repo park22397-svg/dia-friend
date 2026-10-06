@@ -640,6 +640,36 @@
                     if (s.rim_power !== undefined) mt.rimFresnelPower = s.rim_power;
                     if (s.rim_lift !== undefined) mt.rimLift = s.rim_lift;
 
+                    // 윤곽선 (2026-10-06 "윤곽선 선명하게").
+                    //
+                    // 파일에 든 값은 월드 기준 0.08cm 였다. 서 있는 거리(2.8m)
+                    // 에서 화면 1px 이 2.5mm 쯤이라 선이 0.3px — 거의 안 보이고
+                    // 가장자리만 지글거렸다. 화면 기준으로 바꿔 거리와 상관없이
+                    // 늘 같은 두께(약 1px)로 그린다. 월드 기준으로 굵히면 바짝
+                    // 다가갔을 때 얼굴 둘레가 만화처럼 두꺼워진다.
+                    //
+                    // 외곽선이 원래 있는 재질만 손댄다(mode 0 은 선 메시가 없다).
+                    if (s.outline_width !== undefined && mt.outlineWidthMode) {
+                        mt.outlineWidthMode = (s.outline_mode === 'world') ? 1 : 2;
+                        mt.outlineWidth = s.outline_width
+                            * ((isFaceMesh(o) && typeof s.outline_face === 'number') ? s.outline_face : 1);
+                        if (s.outline_max_dist !== undefined) {
+                            mt.outlineScaledMaxDistance = s.outline_max_dist;
+                        }
+                    }
+
+                    // 비스듬한 면(치마 주름·신발 옆)의 무늬가 뭉개지지 않게
+                    if (s.anisotropy) {
+                        const an = Math.min(s.anisotropy,
+                            renderer.capabilities.getMaxAnisotropy());
+                        [mt.map, mt.shadeTexture].forEach(t => {
+                            if (t && t.anisotropy !== an) {
+                                t.anisotropy = an;
+                                t.needsUpdate = true;
+                            }
+                        });
+                    }
+
                     mt.needsUpdate = true;
                     count++;
                 });

@@ -2660,6 +2660,21 @@ DIA = VirtualAvatar(
             "rim_mix": 0.35,
             "rim_power": 3.0,
             "rim_lift": 0.0,
+
+            # 윤곽선 (2026-10-06 "윤곽선 선명하게 보이게").
+            #
+            # 파일 값(월드 0.08cm)은 서 있는 거리에서 0.3px 라 안 보였다.
+            # 화면 기준(screen)으로 바꿔 거리와 상관없이 같은 두께로 그린다.
+            # outline_width 는 화면 높이의 0.005 배 = 0.3 이면 800px 화면에서
+            # 약 1.2px. 얼굴(outline_face)은 그 0.7 배 — 턱선이 만화처럼
+            # 굵어지지 않게. outline_max_dist 보다 멀면 선이 가늘어진다.
+            "outline_mode": "screen",
+            "outline_width": 0.3,
+            "outline_face": 0.7,
+            "outline_max_dist": 10.0,
+
+            # 비스듬히 보이는 면의 무늬(치마 주름·신발 옆)를 덜 뭉갠다.
+            "anisotropy": 8,
         },
 
 
