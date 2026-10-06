@@ -159,7 +159,10 @@ def main():
             paths.append(js)
 
         r = subprocess.run([node, stub] + paths,
-                           capture_output=True, text=True, timeout=120)
+                           capture_output=True, text=True, timeout=120,
+                           # node 는 UTF-8 로 쓴다. 기본(cp949)으로 읽으면 한글이 섞인
+                           # 오류 줄에서 UnicodeDecodeError 가 나 진짜 FAIL 이 가려진다.
+                           encoding="utf-8", errors="replace")
 
         total = sum(len(code.splitlines()) for _n, code in chunks)
 

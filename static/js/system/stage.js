@@ -59,8 +59,16 @@
 
         const scene = new THREE.Scene();
 
+        // 화각(세로, 도).
+        //
+        // 30 이었을 때는 1인칭 눈높이에서 다이아가 가슴께에서 잘렸다.
+        // 머리부터 발끝까지 담으려고 넓혔다(2026-10-06 사용자 지시
+        // "전신이 다 보이게"). 카메라를 뒤로 물리는 것(user.js 의
+        // VIEW_BACK)과 짝이다 — 화각만 넓히면 원근이 일그러진다.
+        const VIEW_FOV = 40;
+
         const camera = new THREE.PerspectiveCamera(
-            30,
+            VIEW_FOV,
             canvas.clientWidth / canvas.clientHeight,
             0.1,
             20.0
@@ -100,16 +108,26 @@
         // 사진기의 시프트 렌즈와 같은 것이다.
         const FRAME_LIFT = 0.10;
 
-        function applyFrameLift() {
+        // 지금 쓰는 값. 1인칭에서는 다이아와의 거리에 따라 user.js 가
+        // 바꾼다 — 떨어져 있으면 발끝까지 담도록 많이 올린다.
+        let frameLift = FRAME_LIFT;
+
+        function applyFrameLift(v) {
+            if (typeof v === 'number') {
+                // 같은 값이면 행렬을 다시 만들 일이 없다
+                if (Math.abs(v - frameLift) < 1e-4 && camera.view) return;
+                frameLift = v;
+            }
+
             const w = canvas.clientWidth || 1;
             const h = canvas.clientHeight || 1;
 
-            if (!FRAME_LIFT) {
+            if (!frameLift) {
                 camera.clearViewOffset();
                 return;
             }
 
-            camera.setViewOffset(w, h, 0, Math.round(h * FRAME_LIFT), w, h);
+            camera.setViewOffset(w, h, 0, Math.round(h * frameLift), w, h);
         }
 
         camera.position.set(0.0, CAM_Y, 1.65);

@@ -40,6 +40,16 @@
         const USER_GRAV = 7.0;         // 중력 m/s^2
         const LOOK_SENS = 0.0042;      // 마우스로 둘러보는 감도
 
+        // 전신이 보이게 — 카메라를 눈 뒤로 물리는 거리와 렌즈 올림.
+        // 다이아와 VIEW_OPEN 이상 떨어져 있으면 다 물리고,
+        // VIEW_CLOSE 안으로 들어오면 눈 자리로 돌아온다(사이는 부드럽게).
+        // 화각(VIEW_FOV)은 stage.js 에 있다. 셋을 같이 맞춘 값이다 —
+        // 1280x800 과 390x844 에서 머리끝·발끝이 다 들어온다.
+        const VIEW_BACK = 1.35;        // 물러나는 거리(m)
+        const VIEW_SHIFT = 0.36;       // 렌즈 올림(화면 높이의 비율)
+        const VIEW_OPEN = 1.25;
+        const VIEW_CLOSE = 0.6;
+
         const user = {
             on: true,            // 상대가 화면 안에 서 있다 (카메라가 곧 눈)
             x: 0, z: 1.65,       // 발이 딛고 선 자리
@@ -161,9 +171,27 @@
 
             user.eye = USER_SIT + (USER_EYE - USER_SIT) * (1 - user.sit);
 
-            // ---- 카메라가 곧 눈이다 ----
-            camera.position.set(user.x, user.eye + user.lift, user.z);
+            // ---- 카메라는 눈에서 조금 물러나 있다 ----
+            //
+            // 눈 자리에 그대로 두면 서 있는 거리(1.35~1.65)에서 다이아가
+            // 가슴께에서 잘렸다. 머리부터 발끝까지 보이도록 카메라만
+            // 등 뒤로 물리고 렌즈를 올린다. **눈(userEye)은 그대로다** —
+            // 손이 닿는 거리·따라오기·입맞춤은 여전히 눈에서 잰다.
+            //
+            // 바짝 다가가면 물러남을 거둔다. 얼굴을 맞대려고 다가갔는데
+            // 카메라가 멀리 남아 있으면 다가간 것이 안 보인다.
+            const toDia = Math.hypot(user.x - roam.x, user.z - roam.z);
+            const fit = Math.max(0, Math.min(1,
+                (toDia - VIEW_CLOSE) / (VIEW_OPEN - VIEW_CLOSE)));
+            const back = VIEW_BACK * fit;
+
+            camera.position.set(
+                user.x - userForwardX() * back,
+                user.eye + user.lift,
+                user.z - userForwardZ() * back
+            );
             camera.rotation.set(user.pitch, user.yaw + Math.PI, 0);
+            applyFrameLift(FRAME_LIFT + (VIEW_SHIFT - FRAME_LIFT) * fit);
 
             // 투명한 몸도 같이 간다. 앉으면 낮아지고 뛰면 뜬다.
             const h = 1 - user.sit * 0.4;

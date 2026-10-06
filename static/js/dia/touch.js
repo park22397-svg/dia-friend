@@ -100,9 +100,13 @@
 
             // 손이 닿는 거리 밖이면 못 만진다.
             // 방 건너편에서 쓰다듬을 수는 없다 — 만지려면 다가가야 한다.
+            //
+            // 화면을 누르는 것은 touch_reach 로 잰다(avatar.py). reach(1.55)
+            // 로 재면 서 있는 자리에서 머리 위쪽만 눌리고 나머지는 죽어
+            // 있었다 — 조이스틱을 감춘 뒤로는 폰에서 다가갈 길도 없다.
             if (user.on
                 && userEye().distanceTo(hit.point)
-                   > followCfg('reach', 0.95)) return null;
+                   > followCfg('touch_reach', followCfg('reach', 0.95))) return null;
 
             const node = hit.object.parent;
             const local = node.worldToLocal(hit.point.clone());
