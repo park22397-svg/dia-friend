@@ -112,6 +112,12 @@ def _scene_update(user_text, here=None):
     if not want:
         want = WORLD.scene_of_place(here if here is not None else _place_here())
 
+    # 말로 다른 곳에 옮겨 갔다 — 그림이 없는 곳이라도
+    if not want and now and WORLD.scene_moved_away(user_text, now):
+        print(f"[장면]: {now.get('label')} 끝 (다른 곳으로 감)")
+        _scene_set(None)
+        return None
+
     if want:
         if not now or now.get("key") != want.get("key"):
             print(f"[장면]: {(now or {}).get('label') or '없음'}"

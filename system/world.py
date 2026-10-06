@@ -261,6 +261,10 @@ class World:
 
         low = str(text).lower().replace(" ", "")
 
+        # 그 자리에서 나온다는 말이면 이름이 나와도 열지 않는다
+        if self._has(low, self.scenes_conf().get("exit_words", [])):
+            return None
+
         for s in self.scenes():
             for w in s.get("enter_words", []):
                 if str(w).replace(" ", "") in low:
@@ -273,9 +277,31 @@ class World:
             return False
 
         low = str(text).lower().replace(" ", "")
+        conf = self.scenes_conf()
 
-        return any(str(w).replace(" ", "") in low
-                   for w in self.scenes_conf().get("leave_words", []))
+        return (self._has(low, conf.get("leave_words", []))
+                or self._has(low, conf.get("exit_words", [])))
+
+    @staticmethod
+    def _has(low, words):
+        return any(str(w).replace(" ", "") in low for w in words)
+
+    def scene_moved_away(self, text, scene):
+        """상대가 다른 곳으로 옮겨 갔다고 말했는가 (그 장면의 곳이 아닌 데로)."""
+        if not text or not scene:
+            return False
+
+        low = str(text).lower().replace(" ", "")
+        conf = self.scenes_conf()
+
+        if not self._has(low, conf.get("move_words", [])):
+            return False
+
+        mine = list(scene.get("places", [])) + list(scene.get("enter_words", []))
+        if self._has(low, mine):
+            return False
+
+        return self._has(low, conf.get("elsewhere_words", []))
 
     def scene_note(self, scene):
         """지금 어떤 자리인지 한 줄로. 없으면 None.
