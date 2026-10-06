@@ -66,10 +66,10 @@
         // "전신이 다 보이게"). 카메라를 뒤로 물리는 것(user.js 의
         // VIEW_BACK)과 짝이다 — 화각만 넓히면 원근이 일그러진다.
         //
-        // 40 -> 47.5 (같은 날, "아바타 한 개만큼 앞으로"). 카메라를 0.45m
-        // 당기고(user.js) 처음 자리를 따라와 서는 자리(1.35)로 맞췄다.
-        // 가까워진 만큼 발끝이 빠지지 않게 조금 넓혔다.
-        const VIEW_FOV = 47.5;
+        // "반만큼 앞으로"(user.js 의 VIEW_BACK·USER_START_Z)에서도 40 그대로
+        // 발끝까지 들어온다. 더 당기면 따라와 선 자리에서 발이 빠지니 그때
+        // 여기를 같이 넓힐 것.
+        const VIEW_FOV = 40;
 
         const camera = new THREE.PerspectiveCamera(
             VIEW_FOV,
